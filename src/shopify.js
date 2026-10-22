@@ -2,10 +2,36 @@ import { config } from './config.js';
 
 const endpoint = `https://${config.shopDomain}/admin/api/2026-07/graphql.json`;
 
+let accessToken = null;
+let accessTokenExpiresAt = 0;
+
+async function getAccessToken() {
+  if (accessToken && Date.now() < accessTokenExpiresAt - 60_000) return accessToken;
+
+  const response = await fetch(`https://${config.shopDomain}/admin/oauth/access_token`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      grant_type: 'client_credentials',
+      client_id: config.shopifyClientId,
+      client_secret: config.shopifyClientSecret
+    })
+  });
+
+  const payload = await response.json();
+  if (!response.ok || !payload.access_token || !payload.expires_in) {
+    throw new Error(`Shopify token request failed (${response.status})`);
+  }
+
+  accessToken = payload.access_token;
+  accessTokenExpiresAt = Date.now() + Number(payload.expires_in) * 1000;
+  return accessToken;
+}
+
 async function graphql(query, variables) {
   const response = await fetch(endpoint, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': config.adminAccessToken },
+    headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': await getAccessToken() },
     body: JSON.stringify({ query, variables })
   });
   const payload = await response.json();

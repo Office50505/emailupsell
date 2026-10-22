@@ -18,7 +18,7 @@ The service starts in `EMAIL_MODE=preview`. Preview mode records a send as `prev
 
 ## Shopify setup
 
-Create a custom app for this service and grant the minimum required scopes:
+Create a Dev Dashboard app for this service and grant the minimum required scopes:
 
 - `read_orders` — abandoned checkouts and orders
 - `read_customers` — email marketing consent
@@ -29,7 +29,7 @@ Set webhook subscriptions to:
 - `https://YOUR-EMAIL-SERVICE/webhooks/orders/create`
 - `https://YOUR-EMAIL-SERVICE/webhooks/customers/email-marketing-consent/update`
 
-Use the same webhook signing secret in `SHOPIFY_WEBHOOK_SECRET`.
+In the Dev Dashboard, copy the app's Client ID and Client secret from **Settings** into `SHOPIFY_CLIENT_ID` and `SHOPIFY_CLIENT_SECRET`. The service exchanges those credentials for a fresh 24-hour token automatically, and uses the same client secret to verify Shopify webhooks.
 
 The service queries the GraphQL `abandonedCheckouts` connection during its scheduled job. It requires the staff/API permission to manage abandoned checkouts.
 

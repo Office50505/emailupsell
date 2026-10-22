@@ -20,8 +20,10 @@ export const config = {
   databaseUrl: required('DATABASE_URL'),
   databaseSsl: process.env.DATABASE_SSL !== 'false',
   shopDomain: required('SHOPIFY_SHOP_DOMAIN').replace(/^https?:\/\//, '').replace(/\/$/, ''),
-  adminAccessToken: required('SHOPIFY_ADMIN_ACCESS_TOKEN'),
-  webhookSecret: required('SHOPIFY_WEBHOOK_SECRET'),
+  shopifyClientId: required('SHOPIFY_CLIENT_ID'),
+  // Shopify uses the app client secret to sign webhooks from a Dev Dashboard app.
+  shopifyClientSecret: required('SHOPIFY_CLIENT_SECRET'),
+  webhookSecret: required('SHOPIFY_CLIENT_SECRET'),
   jobSecret: required('JOB_SECRET'),
   unsubscribeSecret: required('UNSUBSCRIBE_SECRET'),
   emailMode,
