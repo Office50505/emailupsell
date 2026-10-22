@@ -42,7 +42,7 @@ app.post('/webhooks/customers/email-marketing-consent/update', ...rawWebhook(asy
 
 app.get('/unsubscribe', async (request, response) => {
   const { email, expires, signature } = request.query;
-  if (!verifyUnsubscribeSignature({ email, expires, signature }, config.webhookSecret)) {
+  if (!verifyUnsubscribeSignature({ email, expires, signature }, config.unsubscribeSecret)) {
     return response.status(400).send('This unsubscribe link is invalid or expired.');
   }
   await suppressContact(normalizeEmail(email), 'email_link');

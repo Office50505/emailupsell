@@ -23,6 +23,7 @@ export const config = {
   adminAccessToken: required('SHOPIFY_ADMIN_ACCESS_TOKEN'),
   webhookSecret: required('SHOPIFY_WEBHOOK_SECRET'),
   jobSecret: required('JOB_SECRET'),
+  unsubscribeSecret: required('UNSUBSCRIBE_SECRET'),
   emailMode,
   emailFrom: required('EMAIL_FROM'),
   resendApiKey: process.env.RESEND_API_KEY ?? '',

@@ -8,7 +8,7 @@ function escapeHtml(value) {
 
 function unsubscribeUrl(email) {
   const expires = Date.now() + 365 * 24 * 60 * 60 * 1000;
-  const signature = unsubscribeSignature({ email, expires }, config.webhookSecret);
+  const signature = unsubscribeSignature({ email, expires }, config.unsubscribeSecret);
   return `${config.storeUrl}/apps/email-upsell/unsubscribe?email=${encodeURIComponent(email)}&expires=${expires}&signature=${signature}`;
 }
 
