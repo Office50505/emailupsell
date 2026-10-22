@@ -47,3 +47,19 @@ CREATE INDEX IF NOT EXISTS email_campaign_jobs_due_idx
 
 CREATE INDEX IF NOT EXISTS email_campaign_jobs_recipient_idx
   ON email_campaign_jobs (shop_domain, recipient_email, sent_at DESC);
+
+CREATE TABLE IF NOT EXISTS email_campaign_settings (
+  shop_domain TEXT NOT NULL,
+  campaign_type TEXT NOT NULL CHECK (campaign_type IN ('abandoned_checkout', 'post_purchase_upsell')),
+  enabled BOOLEAN NOT NULL DEFAULT TRUE,
+  delay_minutes INTEGER NOT NULL CHECK (delay_minutes BETWEEN 5 AND 43200),
+  cooldown_days INTEGER NOT NULL DEFAULT 7 CHECK (cooldown_days BETWEEN 1 AND 90),
+  subject TEXT NOT NULL,
+  preheader TEXT NOT NULL,
+  heading TEXT NOT NULL,
+  body TEXT NOT NULL,
+  cta_label TEXT NOT NULL,
+  cta_url TEXT NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (shop_domain, campaign_type)
+);

@@ -1,12 +1,16 @@
+import path from 'node:path';
 import express from 'express';
 import { config } from './config.js';
+import { requireEmbeddedAdmin } from './admin-auth.js';
 import { queueAbandonedCheckouts, processDueJobs, queuePostPurchaseOrder } from './campaigns.js';
-import { jobCounts, recordOrder, suppressContact, upsertContact } from './db.js';
+import { dashboardSummary, getCampaignSettings, jobCounts, listCampaignSettings, recordOrder, suppressContact, updateCampaignSettings, upsertContact } from './db.js';
+import { deliverEmail, renderCampaignPreview } from './email.js';
 import { hasValidWebhookHmac, normalizeEmail, verifyUnsubscribeSignature } from './security.js';
 import { contactFromMarketingWebhook, contactFromOrder } from './webhooks.js';
 
 const app = express();
-app.get('/health', async (_request, response) => response.json({ ok: true, emailMode: config.emailMode, jobs: await jobCounts() }));
+const dashboardDir = path.join(process.cwd(), 'public', 'app');
+const campaignTypes = new Set(['abandoned_checkout', 'post_purchase_upsell']);
 
 function rawWebhook(handler) {
   return [express.raw({ type: 'application/json' }), async (request, response) => {
@@ -23,6 +27,18 @@ function rawWebhook(handler) {
     }
   }];
 }
+
+function isSetting(value) {
+  const validStrings = ['subject', 'preheader', 'heading', 'body', 'ctaLabel', 'ctaUrl']
+    .every(key => typeof value?.[key] === 'string' && value[key].trim().length > 0 && value[key].length <= 2000);
+  return Boolean(value && typeof value.enabled === 'boolean'
+    && Number.isInteger(value.delayMinutes) && value.delayMinutes >= 5 && value.delayMinutes <= 43200
+    && Number.isInteger(value.cooldownDays) && value.cooldownDays >= 1 && value.cooldownDays <= 90
+    && validStrings
+    && (/^https?:\/\//.test(value.ctaUrl) || value.ctaUrl === '{{recovery_url}}'));
+}
+
+app.get('/health', async (_request, response) => response.json({ ok: true, emailMode: config.emailMode, jobs: await jobCounts() }));
 
 app.post('/webhooks/orders/create', ...rawWebhook(async order => {
   const contact = contactFromOrder(order);
@@ -60,5 +76,42 @@ app.post('/jobs/run', express.json(), async (request, response) => {
     response.status(500).json({ error: 'Campaign run failed' });
   }
 });
+
+app.get('/app-config.js', (_request, response) => {
+  response.type('application/javascript').send(`window.__PRINTMIVO_APP__=${JSON.stringify({ apiKey: config.shopifyClientId, shop: config.shopDomain })};`);
+});
+
+app.use('/api/admin', express.json({ limit: '100kb' }), requireEmbeddedAdmin);
+
+app.get('/api/admin/dashboard', async (_request, response) => {
+  const [settings, summary] = await Promise.all([listCampaignSettings(), dashboardSummary()]);
+  response.json({ settings, summary, mode: config.emailMode });
+});
+
+app.put('/api/admin/campaigns/:campaignType', async (request, response) => {
+  const { campaignType } = request.params;
+  if (!campaignTypes.has(campaignType) || !isSetting(request.body)) return response.status(422).json({ error: 'Enter valid campaign settings before saving.' });
+  const setting = await updateCampaignSettings(campaignType, request.body);
+  response.json({ setting });
+});
+
+app.get('/api/admin/campaigns/:campaignType/preview', async (request, response) => {
+  if (!campaignTypes.has(request.params.campaignType)) return response.status(404).json({ error: 'Campaign not found.' });
+  const setting = await getCampaignSettings(request.params.campaignType);
+  response.json(renderCampaignPreview(setting));
+});
+
+app.post('/api/admin/campaigns/:campaignType/test', async (request, response) => {
+  if (!campaignTypes.has(request.params.campaignType)) return response.status(404).json({ error: 'Campaign not found.' });
+  const to = normalizeEmail(request.body?.email);
+  if (!to || !/^\S+@\S+\.\S+$/.test(to)) return response.status(422).json({ error: 'Enter a valid test recipient email.' });
+  const setting = await getCampaignSettings(request.params.campaignType);
+  const email = renderCampaignPreview(setting);
+  const delivery = await deliverEmail({ to, ...email });
+  response.json({ ok: true, id: delivery.id, mode: config.emailMode });
+});
+
+app.use(express.static(dashboardDir, { maxAge: '1h', index: 'index.html' }));
+app.get('/app', (_request, response) => response.sendFile(path.join(dashboardDir, 'index.html')));
 
 app.listen(config.port, () => console.log(`Printmivo email-upsell service listening on :${config.port} (${config.emailMode})`));

@@ -1,5 +1,4 @@
-import { config } from './config.js';
-import { claimDueJobs, enqueueCampaign, markFailed, markSent, markSkipped, sendEligibility } from './db.js';
+import { claimDueJobs, enqueueCampaign, getCampaignSettings, markFailed, markSent, markSkipped, sendEligibility } from './db.js';
 import { deliverEmail, renderEmail } from './email.js';
 import { listOpenAbandonedCheckouts } from './shopify.js';
 import { normalizeEmail } from './security.js';
@@ -8,11 +7,9 @@ function dueInMinutes(minutes) {
   return new Date(Date.now() + minutes * 60 * 1000);
 }
 
-function dueInDays(days) {
-  return new Date(Date.now() + days * 24 * 60 * 60 * 1000);
-}
-
 export async function queueAbandonedCheckouts() {
+  const setting = await getCampaignSettings('abandoned_checkout');
+  if (!setting?.enabled) return { scanned: 0, queued: 0, disabled: true };
   const checkouts = await listOpenAbandonedCheckouts();
   let queued = 0;
   for (const checkout of checkouts) {
@@ -23,7 +20,7 @@ export async function queueAbandonedCheckouts() {
       sourceId: checkout.id,
       recipientEmail: email,
       recipientName: checkout.customer?.firstName ?? null,
-      dueAt: dueInMinutes(config.abandonedCheckoutDelayMinutes),
+      dueAt: dueInMinutes(setting.delayMinutes),
       payload: {
         recoveryUrl: checkout.abandonedCheckoutUrl,
         checkoutUpdatedAt: checkout.updatedAt,
@@ -36,6 +33,8 @@ export async function queueAbandonedCheckouts() {
 }
 
 export async function queuePostPurchaseOrder(order) {
+  const setting = await getCampaignSettings('post_purchase_upsell');
+  if (!setting?.enabled) return null;
   const email = normalizeEmail(order.email ?? order.customer?.email);
   if (!email) return null;
   return enqueueCampaign({
@@ -43,7 +42,7 @@ export async function queuePostPurchaseOrder(order) {
     sourceId: String(order.id),
     recipientEmail: email,
     recipientName: order.customer?.first_name ?? order.customer?.firstName ?? null,
-    dueAt: dueInDays(config.postPurchaseDelayDays),
+    dueAt: dueInMinutes(setting.delayMinutes),
     payload: { orderId: String(order.id), orderName: order.name ?? order.order_number ?? '', lineItems: order.line_items ?? [] }
   });
 }
@@ -53,13 +52,19 @@ export async function processDueJobs() {
   const summary = { claimed: jobs.length, sent: 0, skipped: 0, failed: 0 };
   for (const job of jobs) {
     try {
-      const eligibility = await sendEligibility(job, config.marketingCooldownDays);
+      const setting = await getCampaignSettings(job.campaign_type);
+      if (!setting?.enabled) {
+        await markSkipped(job.id, 'campaign_disabled');
+        summary.skipped += 1;
+        continue;
+      }
+      const eligibility = await sendEligibility(job, setting.cooldownDays);
       if (!eligibility.allowed) {
         await markSkipped(job.id, eligibility.reason);
         summary.skipped += 1;
         continue;
       }
-      const email = renderEmail(job);
+      const email = renderEmail(job, setting);
       const delivery = await deliverEmail({ to: job.recipient_email, ...email });
       await markSent(job.id, delivery.id);
       summary.sent += 1;

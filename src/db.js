@@ -130,3 +130,119 @@ export async function jobCounts() {
   );
   return Object.fromEntries(result.rows.map(row => [row.status, row.count]));
 }
+
+const defaults = {
+  abandoned_checkout: {
+    enabled: true,
+    delayMinutes: config.abandonedCheckoutDelayMinutes,
+    cooldownDays: config.marketingCooldownDays,
+    subject: 'Your Printmivo order is waiting',
+    preheader: 'Your custom stamp is ready when you are.',
+    heading: 'Still thinking it over{{first_name}}?',
+    body: 'Your selected Printmivo items are still saved. Finish checkout whenever you are ready.',
+    ctaLabel: 'Return to checkout',
+    ctaUrl: '{{recovery_url}}'
+  },
+  post_purchase_upsell: {
+    enabled: true,
+    delayMinutes: config.postPurchaseDelayDays * 24 * 60,
+    cooldownDays: config.marketingCooldownDays,
+    subject: 'Complete your Printmivo kit',
+    preheader: 'A few finishing touches for your next order.',
+    heading: 'A useful next step{{first_name}}',
+    body: 'Keep your branding consistent with practical add-ons picked for your recent Printmivo order.',
+    ctaLabel: 'Shop recommended add-ons',
+    ctaUrl: `${config.storeUrl}/collections/all?utm_source=printmivo-email&utm_medium=upsell&utm_campaign=post_purchase`
+  }
+};
+
+function toSetting(row) {
+  return {
+    campaignType: row.campaign_type,
+    enabled: row.enabled,
+    delayMinutes: row.delay_minutes,
+    cooldownDays: row.cooldown_days,
+    subject: row.subject,
+    preheader: row.preheader,
+    heading: row.heading,
+    body: row.body,
+    ctaLabel: row.cta_label,
+    ctaUrl: row.cta_url,
+    updatedAt: row.updated_at
+  };
+}
+
+export async function ensureCampaignSettings() {
+  for (const [campaignType, setting] of Object.entries(defaults)) {
+    await pool.query(
+      `INSERT INTO email_campaign_settings
+       (shop_domain, campaign_type, enabled, delay_minutes, cooldown_days, subject, preheader, heading, body, cta_label, cta_url)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+       ON CONFLICT (shop_domain, campaign_type) DO NOTHING`,
+      [config.shopDomain, campaignType, setting.enabled, setting.delayMinutes, setting.cooldownDays, setting.subject, setting.preheader, setting.heading, setting.body, setting.ctaLabel, setting.ctaUrl]
+    );
+  }
+}
+
+export async function getCampaignSettings(campaignType) {
+  await ensureCampaignSettings();
+  const result = await pool.query(
+    `SELECT * FROM email_campaign_settings WHERE shop_domain = $1 AND campaign_type = $2`,
+    [config.shopDomain, campaignType]
+  );
+  return result.rows[0] ? toSetting(result.rows[0]) : null;
+}
+
+export async function listCampaignSettings() {
+  await ensureCampaignSettings();
+  const result = await pool.query(
+    `SELECT * FROM email_campaign_settings WHERE shop_domain = $1 ORDER BY campaign_type`,
+    [config.shopDomain]
+  );
+  return result.rows.map(toSetting);
+}
+
+export async function updateCampaignSettings(campaignType, setting) {
+  await ensureCampaignSettings();
+  const result = await pool.query(
+    `UPDATE email_campaign_settings SET
+       enabled = $3, delay_minutes = $4, cooldown_days = $5, subject = $6, preheader = $7,
+       heading = $8, body = $9, cta_label = $10, cta_url = $11, updated_at = NOW()
+     WHERE shop_domain = $1 AND campaign_type = $2
+     RETURNING *`,
+    [config.shopDomain, campaignType, setting.enabled, setting.delayMinutes, setting.cooldownDays, setting.subject, setting.preheader, setting.heading, setting.body, setting.ctaLabel, setting.ctaUrl]
+  );
+  return result.rows[0] ? toSetting(result.rows[0]) : null;
+}
+
+export async function dashboardSummary() {
+  await ensureCampaignSettings();
+  const [jobs, subscribers, suppressed, recent] = await Promise.all([
+    pool.query(
+      `SELECT campaign_type, status, COUNT(*)::int AS count
+       FROM email_campaign_jobs WHERE shop_domain = $1
+       GROUP BY campaign_type, status`,
+      [config.shopDomain]
+    ),
+    pool.query(`SELECT COUNT(*)::int AS count FROM email_contacts WHERE shop_domain = $1 AND marketing_state = 'SUBSCRIBED' AND suppressed_at IS NULL`, [config.shopDomain]),
+    pool.query(`SELECT COUNT(*)::int AS count FROM email_contacts WHERE shop_domain = $1 AND suppressed_at IS NOT NULL`, [config.shopDomain]),
+    pool.query(
+      `SELECT campaign_type, recipient_email, status, due_at, sent_at, created_at
+       FROM email_campaign_jobs WHERE shop_domain = $1
+       ORDER BY COALESCE(sent_at, due_at, created_at) DESC LIMIT 8`,
+      [config.shopDomain]
+    )
+  ]);
+  const counts = { abandoned_checkout: {}, post_purchase_upsell: {} };
+  for (const row of jobs.rows) counts[row.campaign_type][row.status] = row.count;
+  return {
+    audience: { subscribed: subscribers.rows[0].count, suppressed: suppressed.rows[0].count },
+    counts,
+    recent: recent.rows.map(row => ({
+      campaignType: row.campaign_type,
+      recipient: row.recipient_email.replace(/(^.).*(@.*$)/, '$1•••$2'),
+      status: row.status,
+      timestamp: row.sent_at ?? row.due_at ?? row.created_at
+    }))
+  };
+}

@@ -7,6 +7,18 @@ Private, single-store campaign service for two consent-safe flows:
 
 The service starts in `EMAIL_MODE=preview`. Preview mode records a send as `preview_<uuid>` and writes it to logs; it cannot deliver to a customer. Set `EMAIL_MODE=live` and add a verified Resend account/key only after test approval.
 
+## Embedded Email Studio
+
+The app URL is a secure, embedded Shopify Admin dashboard. It includes:
+
+- editable subject lines, preview text, message, CTA and destination for both flows;
+- per-flow enable/disable controls, timing, and marketing frequency caps;
+- current subscriber, suppression, queued and delivery counts;
+- an inbox-style live preview and a test-send workflow;
+- an audit-friendly delivery log with recipient addresses masked in the UI.
+
+Campaign settings are stored in PostgreSQL, so scheduler runs use the saved values rather than the fallback environment defaults. The service runs its schema migration on start; `npm run db:migrate` can also be used manually.
+
 ## Guardrails
 
 - No email is queued without an email address.
@@ -29,15 +41,15 @@ Set webhook subscriptions to:
 - `https://YOUR-EMAIL-SERVICE/webhooks/orders/create`
 - `https://YOUR-EMAIL-SERVICE/webhooks/customers/email-marketing-consent/update`
 
-In the Dev Dashboard, copy the app's Client ID and Client secret from **Settings** into `SHOPIFY_CLIENT_ID` and `SHOPIFY_CLIENT_SECRET`. The service exchanges those credentials for a fresh 24-hour token automatically, and uses the same client secret to verify Shopify webhooks.
+In the Dev Dashboard, copy the app's Client ID and Client secret from **Settings** into `SHOPIFY_CLIENT_ID` and `SHOPIFY_CLIENT_SECRET`. Set the **App URL** to `https://YOUR-EMAIL-SERVICE` and keep **Embed app in Shopify admin** enabled. The service exchanges those credentials for a fresh 24-hour token automatically, uses the same client secret to verify Shopify webhooks, and validates App Bridge session tokens before serving dashboard data.
 
 The service queries the GraphQL `abandonedCheckouts` connection during its scheduled job. It requires the staff/API permission to manage abandoned checkouts.
 
 ## Railway setup
 
 1. Create a separate Railway service and PostgreSQL database.
-2. Run `psql "$DATABASE_URL" -f db/schema.sql` once.
-3. Add variables from `.env.example`; keep `EMAIL_MODE=preview` initially.
+2. Add variables from `.env.example`; keep `EMAIL_MODE=preview` initially.
+3. Set Railway's build command to `npm run build` and start command to `npm start` (the start command applies the safe schema migration automatically).
 4. Schedule an authenticated request every 15 minutes:
 
 ```sh
