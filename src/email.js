@@ -17,7 +17,9 @@ function emailCopy(value) {
 }
 
 const brandLogoUrl = 'https://printmivo.com/cdn/shop/t/9/assets/printmivo-editorial-wordmark.png?width=360';
-const defaultProductHeroUrl = 'https://printmivo.com/cdn/shop/t/9/assets/printmivo-hero-permanent-v1.webp?width=1200';
+// Match the actual permanent-stamp product image customers see on the store.
+// This is also used in dashboard tests where there is no live cart line item.
+const defaultProductHeroUrl = 'https://printmivo.com/cdn/shop/files/ChatGPTImageSep27_2026_06_31_21PM_207ad5ae-4da9-4c55-9b64-c4a6d6d41add.png?v=1790514740';
 
 function productVisual(job) {
   const lineItem = job.payload?.lineItems?.[0] ?? {};
@@ -152,9 +154,13 @@ export function renderEmail(job, setting) {
 
 export function renderCampaignPreview(setting) {
   return renderEmail({
+    campaign_type: setting.campaignType,
     recipient_name: 'Avery',
     recipient_email: 'preview@printmivo.com',
-    payload: { recoveryUrl: `${config.storeUrl}/checkout` }
+    payload: {
+      recoveryUrl: `${config.storeUrl}/checkout`,
+      lineItems: [{ title: 'Permanent Logo Stamp – Printmivo', image: { url: defaultProductHeroUrl } }]
+    }
   }, setting);
 }
 
