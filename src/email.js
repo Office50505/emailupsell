@@ -19,7 +19,25 @@ function emailCopy(value) {
 const brandLogoUrl = 'https://printmivo.com/cdn/shop/t/9/assets/printmivo-editorial-wordmark.png?width=360';
 // Match the actual permanent-stamp product image customers see on the store.
 // This is also used in dashboard tests where there is no live cart line item.
-const defaultProductHeroUrl = 'https://printmivo.com/cdn/shop/files/ChatGPTImageSep27_2026_06_31_21PM_207ad5ae-4da9-4c55-9b64-c4a6d6d41add.png?v=1790514740';
+const defaultProductHeroUrl = 'https://cdn.shopify.com/s/files/1/0852/6000/9693/files/ChatGPTImageSep27_2026_06_31_21PM_207ad5ae-4da9-4c55-9b64-c4a6d6d41add.png?v=1790514740';
+const beforeBrandingImageUrl = 'https://printmivo.com/cdn/shop/t/9/assets/printmivo-before-packaging-v1.png?width=600&height=400&crop=center';
+const afterBrandingImageUrl = 'https://printmivo.com/cdn/shop/t/9/assets/printmivo-after-packaging-v1.png?width=600&height=400&crop=center';
+
+function heroImageUrl(value) {
+  try {
+    const url = new URL(value);
+    // Shopify's CDN makes a real 3:2 crop, not merely a CSS-scaled portrait.
+    // This keeps every hero at the intentional 600 × 400 email proportion.
+    if (url.hostname.endsWith('shopify.com') || url.hostname === 'printmivo.com') {
+      url.searchParams.set('width', '1200');
+      url.searchParams.set('height', '800');
+      url.searchParams.set('crop', 'center');
+    }
+    return url.toString();
+  } catch (_error) {
+    return value;
+  }
+}
 
 function productVisual(job) {
   const lineItem = job.payload?.lineItems?.[0] ?? {};
@@ -29,7 +47,7 @@ function productVisual(job) {
   return {
     // Shopify sends an image URL for abandoned checkout line items. Orders that
     // do not include one retain the on-brand permanent-stamp fallback.
-    url: imageUrl || defaultProductHeroUrl,
+    url: heroImageUrl(imageUrl || defaultProductHeroUrl),
     alt: lineItem.title ? `${lineItem.title} from Printmivo` : 'Custom Printmivo stamp on branded packaging'
   };
 }
@@ -116,7 +134,54 @@ function layout({ preheader, heading, copy, ctaLabel, ctaUrl, email, campaignTyp
               </td>
             </tr>
             <tr>
-              <td align="center" style="padding:22px 20px 0;color:#747a74;font-size:11px;line-height:1.6;">
+              <td style="padding:22px 0 0;">
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="border-collapse:separate;border-spacing:0;background-color:#fffdfa;border:1px solid #dcd8cf;border-radius:16px;overflow:hidden;">
+                  <tr>
+                    <td width="50%" valign="top" style="width:50%;padding:0;">
+                      <img src="${beforeBrandingImageUrl}" width="300" alt="Plain packaging before branding" style="display:block;width:100%;height:auto;border:0;outline:none;text-decoration:none;">
+                    </td>
+                    <td width="50%" valign="middle" style="width:50%;padding:24px 22px;">
+                      <p style="margin:0 0 8px;color:#15714e;font-size:10px;font-weight:bold;letter-spacing:1.25px;line-height:1.3;text-transform:uppercase;">THE SMALL DETAIL</p>
+                      <h2 style="margin:0 0 10px;color:#17211b;font-family:Georgia,'Times New Roman',serif;font-size:23px;font-weight:normal;letter-spacing:-.5px;line-height:1.15;">Plain packaging becomes yours.</h2>
+                      <a href="${escapeHtml(config.storeUrl)}" style="color:#1a694b;font-size:13px;font-weight:bold;line-height:1.4;text-decoration:underline;">See the difference</a>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:16px 0 0;">
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="border-collapse:separate;border-spacing:0;background-color:#fffdfa;border:1px solid #dcd8cf;border-radius:16px;overflow:hidden;">
+                  <tr>
+                    <td width="50%" valign="middle" style="width:50%;padding:24px 22px;">
+                      <p style="margin:0 0 8px;color:#15714e;font-size:10px;font-weight:bold;letter-spacing:1.25px;line-height:1.3;text-transform:uppercase;">MADE TO REUSE</p>
+                      <h2 style="margin:0 0 10px;color:#17211b;font-family:Georgia,'Times New Roman',serif;font-size:23px;font-weight:normal;letter-spacing:-.5px;line-height:1.15;">A branded finish, order after order.</h2>
+                      <a href="${escapeHtml(config.storeUrl)}/collections/all" style="color:#1a694b;font-size:13px;font-weight:bold;line-height:1.4;text-decoration:underline;">Explore Printmivo</a>
+                    </td>
+                    <td width="50%" valign="top" style="width:50%;padding:0;">
+                      <img src="${afterBrandingImageUrl}" width="300" alt="Branded packaging with a custom Printmivo mark" style="display:block;width:100%;height:auto;border:0;outline:none;text-decoration:none;">
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:16px 0 0;">
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="border-collapse:collapse;background-color:#173f31;border-radius:16px;">
+                  <tr>
+                    <td align="center" style="padding:30px 28px 32px;">
+                      <p style="margin:0 0 8px;color:#a9d8b9;font-size:10px;font-weight:bold;letter-spacing:1.45px;line-height:1.3;text-transform:uppercase;">PRINTMIVO</p>
+                      <h2 style="margin:0 0 20px;color:#ffffff;font-family:Georgia,'Times New Roman',serif;font-size:27px;font-weight:normal;letter-spacing:-.65px;line-height:1.16;">Make every package feel considered.</h2>
+                      <a href="${escapeHtml(config.storeUrl)}" style="display:inline-block;padding:13px 21px;border:1px solid #ffffff;border-radius:8px;color:#ffffff;font-size:13px;font-weight:bold;line-height:1;text-align:center;text-decoration:none;">Shop Printmivo</a>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+            <tr>
+              <td align="center" style="padding:26px 20px 0;color:#747a74;font-size:11px;line-height:1.7;">
+                <strong style="color:#315f4c;letter-spacing:.6px;text-transform:uppercase;">Stay connected</strong><br>
+                <a href="${escapeHtml(config.storeUrl)}" style="color:#315f4c;text-decoration:underline;">Printmivo.com</a> &nbsp;·&nbsp; Reply to this email for help<br>
                 You received this because you opted in to Printmivo marketing.<br>
                 <a href="${safeUnsubscribeUrl}" style="color:#315f4c;text-decoration:underline;">Unsubscribe</a> from future marketing emails.
               </td>
