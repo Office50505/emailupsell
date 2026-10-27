@@ -60,6 +60,8 @@ function App() {
   const [notice, setNotice] = useState('');
   const [loading, setLoading] = useState(true);
   const [testEmail, setTestEmail] = useState('');
+  const [testDialogOpen, setTestDialogOpen] = useState(false);
+  const [sendingTest, setSendingTest] = useState(false);
 
   const setting = settings[selected];
   const activity = useMemo(() => summary.recent.slice(0, 5), [summary]);
@@ -92,10 +94,17 @@ function App() {
   }
 
   async function sendTest() {
+    if (!/^\S+@\S+\.\S+$/.test(testEmail.trim())) {
+      setNotice('Enter a valid email address for the test.');
+      return;
+    }
+    setSendingTest(true);
     try {
       const data = await authenticatedFetch(`/api/admin/campaigns/${selected}/test`, { method: 'POST', body: JSON.stringify({ email: testEmail }) });
-      setNotice(data.mode === 'preview' ? 'Preview logged safely. Set EMAIL_MODE=live to deliver through Resend.' : 'Test email sent.');
+      setNotice(data.mode === 'preview' ? 'Preview logged safely. Set EMAIL_MODE=live to deliver through Resend.' : 'Test email sent. Check the inbox you entered.');
+      setTestDialogOpen(false);
     } catch (error) { setNotice(error.message); }
+    finally { setSendingTest(false); }
   }
 
   return <main className="app-shell">
@@ -108,10 +117,20 @@ function App() {
         <div className="stats"><Stat value={summary.audience.subscribed.toLocaleString()} label="marketing subscribers"/><Stat value={Object.values(summary.counts).reduce((total, item) => total + (item.sent || 0), 0).toLocaleString()} label="emails sent" tone="green"/><Stat value={Object.values(summary.counts).reduce((total, item) => total + (item.queued || 0), 0).toLocaleString()} label="waiting to send"/><Stat value={summary.audience.suppressed.toLocaleString()} label="unsubscribed"/></div>
         <section className="panel campaign-panel"><div className="panel-heading"><div><span className="eyebrow">YOUR FLOWS</span><h2>Campaigns</h2></div><span className="subtle">Only opted-in shoppers are eligible.</span></div>{Object.values(settings).map(item => <CampaignRow key={item.campaignType} setting={item} summary={summary} active={selected === item.campaignType} onSelect={setSelected}/>)}</section>
         <section className="editor-grid"><div className="panel editor"><div className="panel-heading"><div><span className="eyebrow">EDITING</span><h2>{labelFor[selected]}</h2></div><label className="switch"><input type="checkbox" checked={setting.enabled} onChange={event => updateField('enabled', event.target.checked)}/><span></span>{setting.enabled ? 'On' : 'Off'}</label></div><p className="editor-intro">{descriptionFor[selected]}</p><div className="timing"><label><span>Send after</span><input type="number" min="5" value={setting.delayMinutes} onChange={event => updateField('delayMinutes', Number(event.target.value))}/><small>minutes · {formatDelay(setting.delayMinutes)}</small></label><label><span>Frequency cap</span><input type="number" min="1" max="90" value={setting.cooldownDays} onChange={event => updateField('cooldownDays', Number(event.target.value))}/><small>days between marketing emails</small></label></div><div className="field"><label>Subject line</label><input value={setting.subject} onChange={event => updateField('subject', event.target.value)}/></div><div className="field"><label>Preview text</label><input value={setting.preheader} onChange={event => updateField('preheader', event.target.value)}/></div><div className="field"><label>Headline</label><input value={setting.heading} onChange={event => updateField('heading', event.target.value)}/></div><div className="field"><label>Message</label><textarea rows="4" value={setting.body} onChange={event => updateField('body', event.target.value)}/></div><div className="two-fields"><div className="field"><label>Button label</label><input value={setting.ctaLabel} onChange={event => updateField('ctaLabel', event.target.value)}/></div><div className="field"><label>Destination</label><input value={setting.ctaUrl} onChange={event => updateField('ctaUrl', event.target.value)}/></div></div><div className="editor-actions"><button className="button secondary" onClick={() => setSettings(current => ({ ...current, [selected]: savedSettings[selected] }))}>Reset</button><button className="button primary" onClick={saveCampaign}>Save changes</button></div></div>
-        <div className="right-column"><section className="panel preview"><div className="panel-heading"><div><span className="eyebrow">LIVE PREVIEW</span><h2>In their inbox</h2></div><span className="phone-dot"></span></div><div className="mail-card"><div className="mail-brand">PRINTMIVO</div><small>{setting.preheader}</small><h3>{setting.heading.replace('{{first_name}}', ' Avery')}</h3><p>{setting.body}</p><button>{setting.ctaLabel}</button><div className="mail-footer">Thoughtful branding, made easy.<br/>Unsubscribe</div></div></section><section className="panel test-send"><span className="eyebrow">CHECK BEFORE YOU SEND</span><h2>Send a test</h2><p>See the exact message before it reaches a customer.</p><input type="email" placeholder="you@company.com" value={testEmail} onChange={event => setTestEmail(event.target.value)}/><button className="button dark" onClick={sendTest}>Send test email</button></section></div></section>
+        <div className="right-column"><section className="panel preview"><div className="panel-heading"><div><span className="eyebrow">LIVE PREVIEW</span><h2>In their inbox</h2></div><span className="phone-dot"></span></div><div className="mail-card"><div className="mail-brand">PRINTMIVO</div><small>{setting.preheader}</small><h3>{setting.heading.replace('{{first_name}}', ' Avery')}</h3><p>{setting.body}</p><button>{setting.ctaLabel}</button><div className="mail-footer">Thoughtful branding, made easy.<br/>Unsubscribe</div></div></section><section className="panel test-send"><span className="eyebrow">CHECK BEFORE YOU SEND</span><h2>Send a test</h2><p>Send the selected campaign's exact saved email to yourself before it reaches customers.</p><button className="button dark" onClick={() => setTestDialogOpen(true)}>Send test email</button></section></div></section>
         <section className="panel activity"><div className="panel-heading"><div><span className="eyebrow">DELIVERY LOG</span><h2>Recent activity</h2></div><span className="subtle">Last 8 automation events</span></div>{loading ? <p className="empty">Loading your latest campaign activity…</p> : activity.length ? <div className="activity-list">{activity.map((item, index) => <div className="activity-row" key={`${item.recipient}-${index}`}><span className={`status-dot ${item.status}`}></span><strong>{labelFor[item.campaignType]}</strong><span>{item.recipient}</span><span>{item.status}</span><time>{new Date(item.timestamp).toLocaleDateString()}</time></div>)}</div> : <p className="empty">Your delivery history will appear here after the first campaign run.</p>}</section>
       </section>
     </div>
+    {testDialogOpen && <div className="dialog-backdrop" role="presentation" onMouseDown={() => !sendingTest && setTestDialogOpen(false)}>
+      <section className="test-dialog" role="dialog" aria-modal="true" aria-labelledby="test-dialog-title" onMouseDown={event => event.stopPropagation()}>
+        <button className="dialog-close" aria-label="Close test email dialog" onClick={() => setTestDialogOpen(false)} disabled={sendingTest}>×</button>
+        <span className="eyebrow">TEST DELIVERY</span>
+        <h2 id="test-dialog-title">Send yourself the {labelFor[selected].toLowerCase()} email</h2>
+        <p>This sends the same saved subject, message, CTA and unsubscribe footer your customer would receive.</p>
+        <label className="field"><span>Email address</span><input autoFocus type="email" placeholder="you@company.com" value={testEmail} onChange={event => setTestEmail(event.target.value)} onKeyDown={event => { if (event.key === 'Enter') sendTest(); }}/></label>
+        <div className="dialog-actions"><button className="button secondary" onClick={() => setTestDialogOpen(false)} disabled={sendingTest}>Cancel</button><button className="button primary" onClick={sendTest} disabled={sendingTest}>{sendingTest ? 'Sending…' : 'Send test email'}</button></div>
+      </section>
+    </div>}
   </main>;
 }
 
