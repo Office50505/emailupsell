@@ -17,9 +17,22 @@ function emailCopy(value) {
 }
 
 const brandLogoUrl = 'https://printmivo.com/cdn/shop/t/9/assets/printmivo-editorial-wordmark.png?width=360';
-const permanentStampHeroUrl = 'https://printmivo.com/cdn/shop/t/9/assets/printmivo-hero-permanent-v1.webp?width=1200';
+const defaultProductHeroUrl = 'https://printmivo.com/cdn/shop/t/9/assets/printmivo-hero-permanent-v1.webp?width=1200';
 
-function layout({ preheader, heading, copy, ctaLabel, ctaUrl, email, campaignType }) {
+function productVisual(job) {
+  const lineItem = job.payload?.lineItems?.[0] ?? {};
+  const image = lineItem.image;
+  const imageUrl = typeof image === 'string' ? image : image?.url ?? image?.src;
+
+  return {
+    // Shopify sends an image URL for abandoned checkout line items. Orders that
+    // do not include one retain the on-brand permanent-stamp fallback.
+    url: imageUrl || defaultProductHeroUrl,
+    alt: lineItem.title ? `${lineItem.title} from Printmivo` : 'Custom Printmivo stamp on branded packaging'
+  };
+}
+
+function layout({ preheader, heading, copy, ctaLabel, ctaUrl, email, campaignType, product }) {
   const safeCtaUrl = escapeHtml(ctaUrl);
   const safeUnsubscribeUrl = escapeHtml(unsubscribeUrl(email));
   const isRecovery = campaignType === 'abandoned_checkout';
@@ -54,7 +67,7 @@ function layout({ preheader, heading, copy, ctaLabel, ctaUrl, email, campaignTyp
                 <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="border-collapse:collapse;">
                   <tr>
                     <td style="padding:0;background-color:#dcefe2;">
-                      <img src="${permanentStampHeroUrl}" width="600" alt="Custom Printmivo stamp on branded packaging" style="display:block;width:100%;max-width:600px;height:auto;border:0;outline:none;text-decoration:none;">
+                      <img src="${escapeHtml(product.url)}" width="600" alt="${escapeHtml(product.alt)}" style="display:block;width:100%;max-width:600px;height:auto;border:0;outline:none;text-decoration:none;">
                     </td>
                   </tr>
                   <tr>
@@ -131,7 +144,8 @@ export function renderEmail(job, setting) {
       ctaLabel: replaceTokens(setting.ctaLabel, job),
       ctaUrl: replaceTokens(setting.ctaUrl, job),
       email: job.recipient_email,
-      campaignType: job.campaign_type
+      campaignType: job.campaign_type,
+      product: productVisual(job)
     })
   };
 }

@@ -51,7 +51,7 @@ const ABANDONED_CHECKOUTS_QUERY = `#graphql
         completedAt
         abandonedCheckoutUrl
         customer { firstName defaultEmailAddress { emailAddress } }
-        lineItems(first: 10) { nodes { title quantity variant { product { handle title } } } }
+        lineItems(first: 10) { nodes { title quantity image { url } variant { product { handle title } } } }
       }
     }
   }
