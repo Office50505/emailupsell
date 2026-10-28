@@ -20,17 +20,19 @@ const brandLogoUrl = 'https://printmivo.com/cdn/shop/t/9/assets/printmivo-editor
 // Match the actual permanent-stamp product image customers see on the store.
 // This is also used in dashboard tests where there is no live cart line item.
 const defaultProductHeroUrl = 'https://cdn.shopify.com/s/files/1/0852/6000/9693/files/ChatGPTImageSep27_2026_06_31_21PM_207ad5ae-4da9-4c55-9b64-c4a6d6d41add.png?v=1790514740';
-const beforeBrandingImageUrl = 'https://printmivo.com/cdn/shop/t/9/assets/printmivo-before-packaging-v1.png?width=600&height=400&crop=center';
-const afterBrandingImageUrl = 'https://printmivo.com/cdn/shop/t/9/assets/printmivo-after-packaging-v1.png?width=600&height=400&crop=center';
+const refillInkImageUrl = 'https://cdn.shopify.com/s/files/1/0852/6000/9693/files/WhatsAppImage2026-04-25at19.18.27.jpg?v=1788956879&width=440&height=300&crop=center';
+const stickerImageUrl = 'https://cdn.shopify.com/s/files/1/0852/6000/9693/files/ChatGPTImageSep11_2026_05_15_27PM.png?v=1789127383&width=440&height=300&crop=center';
+const refillInkUrl = `${config.storeUrl}/products/permanent-refill-ink`;
+const stickerUrl = `${config.storeUrl}/products/custom-logo-stickers-500-pcs-%E2%AD%90-by-stampmymark%C2%AE`;
 
 function heroImageUrl(value) {
   try {
     const url = new URL(value);
-    // Shopify's CDN makes a real 3:2 crop, not merely a CSS-scaled portrait.
-    // This keeps every hero at the intentional 600 × 400 email proportion.
+    // Shopify's CDN makes a real 2:1 crop, not merely a CSS-scaled portrait.
+    // This preserves a strong visual while keeping the main email compact.
     if (url.hostname.endsWith('shopify.com') || url.hostname === 'printmivo.com') {
       url.searchParams.set('width', '1200');
-      url.searchParams.set('height', '800');
+      url.searchParams.set('height', '600');
       url.searchParams.set('crop', 'center');
     }
     return url.toString();
@@ -69,25 +71,25 @@ function layout({ preheader, heading, copy, ctaLabel, ctaUrl, email, campaignTyp
     <meta name="x-apple-disable-message-reformatting">
     <title>${escapeHtml(preheader)}</title>
   </head>
-  <body style="margin:0;padding:0;background-color:#f4f1eb;color:#18221c;font-family:Arial,Helvetica,sans-serif;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;">
+  <body style="margin:0;padding:0;background-color:#f4f1eb;background-image:linear-gradient(#f4f1eb,#f4f1eb);color:#18221c;font-family:Arial,Helvetica,sans-serif;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;">
     <div style="display:none;max-height:0;max-width:0;overflow:hidden;opacity:0;mso-hide:all;">${escapeHtml(preheader)}&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;</div>
-    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;margin:0;padding:0;background-color:#f4f1eb;border-collapse:collapse;">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" bgcolor="#f4f1eb" style="width:100%;margin:0;padding:0;background-color:#f4f1eb;background-image:linear-gradient(#f4f1eb,#f4f1eb);border-collapse:collapse;">
       <tr>
         <td align="center" style="padding:30px 14px 40px;">
           <table role="presentation" width="600" cellspacing="0" cellpadding="0" border="0" style="width:100%;max-width:600px;border-collapse:collapse;">
             <tr>
-              <td align="center" style="padding:0 0 20px;">
-                <a href="${escapeHtml(config.storeUrl)}" style="display:inline-block;text-decoration:none;">
+              <td align="center" bgcolor="#fffdfa" style="padding:18px 0 20px;background-color:#fffdfa;background-image:linear-gradient(#fffdfa,#fffdfa);border:1px solid #dcd8cf;border-bottom:0;border-radius:18px 18px 0 0;">
+                <a href="${escapeHtml(config.storeUrl)}" style="display:inline-block;text-decoration:none;background-color:#fffdfa;background-image:linear-gradient(#fffdfa,#fffdfa);">
                   <img src="${brandLogoUrl}" width="154" alt="Printmivo" style="display:block;width:154px;max-width:154px;height:auto;border:0;outline:none;text-decoration:none;">
                 </a>
               </td>
             </tr>
             <tr>
-              <td style="overflow:hidden;border:1px solid #dcd8cf;border-radius:18px;background-color:#fffdfa;">
+              <td bgcolor="#fffdfa" style="overflow:hidden;border:1px solid #dcd8cf;border-radius:0 0 18px 18px;background-color:#fffdfa;background-image:linear-gradient(#fffdfa,#fffdfa);">
                 <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="border-collapse:collapse;">
                   <tr>
-                    <td style="padding:0;background-color:#dcefe2;">
-                      <img src="${escapeHtml(product.url)}" width="600" alt="${escapeHtml(product.alt)}" style="display:block;width:100%;max-width:600px;height:auto;border:0;outline:none;text-decoration:none;">
+                    <td bgcolor="#dcefe2" style="padding:0;background-color:#dcefe2;background-image:linear-gradient(#dcefe2,#dcefe2);">
+                      <img src="${escapeHtml(product.url)}" width="600" height="300" alt="${escapeHtml(product.alt)}" style="display:block;width:100%;max-width:600px;height:auto;border:0;outline:none;text-decoration:none;">
                     </td>
                   </tr>
                   <tr>
@@ -103,7 +105,7 @@ function layout({ preheader, heading, copy, ctaLabel, ctaUrl, email, campaignTyp
                   </tr>
                   <tr>
                     <td style="padding:22px 36px 26px;">
-                      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="border-collapse:collapse;background-color:#edf8ef;border:1px solid #cde5d3;border-radius:12px;">
+                      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" bgcolor="#edf8ef" style="border-collapse:collapse;background-color:#edf8ef;background-image:linear-gradient(#edf8ef,#edf8ef);border:1px solid #cde5d3;border-radius:12px;">
                         <tr>
                           <td style="padding:14px 16px;color:#176044;font-size:13px;font-weight:bold;line-height:1.45;">${productLabel}</td>
                         </tr>
@@ -135,15 +137,16 @@ function layout({ preheader, heading, copy, ctaLabel, ctaUrl, email, campaignTyp
             </tr>
             <tr>
               <td style="padding:22px 0 0;">
-                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="border-collapse:separate;border-spacing:0;background-color:#fffdfa;border:1px solid #dcd8cf;border-radius:16px;overflow:hidden;">
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" bgcolor="#fffdfa" style="border-collapse:separate;border-spacing:0;background-color:#fffdfa;background-image:linear-gradient(#fffdfa,#fffdfa);border:1px solid #dcd8cf;border-radius:16px;overflow:hidden;">
                   <tr>
                     <td width="50%" valign="top" style="width:50%;padding:0;">
-                      <img src="${beforeBrandingImageUrl}" width="300" alt="Plain packaging before branding" style="display:block;width:100%;height:auto;border:0;outline:none;text-decoration:none;">
+                      <a href="${refillInkUrl}" style="display:block;text-decoration:none;"><img src="${refillInkImageUrl}" width="300" height="205" alt="Permanent Refill Ink" style="display:block;width:100%;height:auto;border:0;outline:none;text-decoration:none;"></a>
                     </td>
                     <td width="50%" valign="middle" style="width:50%;padding:24px 22px;">
-                      <p style="margin:0 0 8px;color:#15714e;font-size:10px;font-weight:bold;letter-spacing:1.25px;line-height:1.3;text-transform:uppercase;">THE SMALL DETAIL</p>
-                      <h2 style="margin:0 0 10px;color:#17211b;font-family:Georgia,'Times New Roman',serif;font-size:23px;font-weight:normal;letter-spacing:-.5px;line-height:1.15;">Plain packaging becomes yours.</h2>
-                      <a href="${escapeHtml(config.storeUrl)}" style="color:#1a694b;font-size:13px;font-weight:bold;line-height:1.4;text-decoration:underline;">See the difference</a>
+                      <p style="margin:0 0 8px;color:#15714e;font-size:10px;font-weight:bold;letter-spacing:1.25px;line-height:1.3;text-transform:uppercase;">COMPLETE YOUR KIT</p>
+                      <h2 style="margin:0 0 8px;color:#17211b;font-family:Georgia,'Times New Roman',serif;font-size:23px;font-weight:normal;letter-spacing:-.5px;line-height:1.15;">Permanent Refill Ink</h2>
+                      <p style="margin:0 0 12px;color:#435148;font-size:13px;line-height:1.45;">Keep every print crisp and ready to go.</p>
+                      <a href="${refillInkUrl}" style="color:#1a694b;font-size:13px;font-weight:bold;line-height:1.4;text-decoration:underline;">Shop refill ink</a>
                     </td>
                   </tr>
                 </table>
@@ -151,15 +154,16 @@ function layout({ preheader, heading, copy, ctaLabel, ctaUrl, email, campaignTyp
             </tr>
             <tr>
               <td style="padding:16px 0 0;">
-                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="border-collapse:separate;border-spacing:0;background-color:#fffdfa;border:1px solid #dcd8cf;border-radius:16px;overflow:hidden;">
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" bgcolor="#fffdfa" style="border-collapse:separate;border-spacing:0;background-color:#fffdfa;background-image:linear-gradient(#fffdfa,#fffdfa);border:1px solid #dcd8cf;border-radius:16px;overflow:hidden;">
                   <tr>
                     <td width="50%" valign="middle" style="width:50%;padding:24px 22px;">
-                      <p style="margin:0 0 8px;color:#15714e;font-size:10px;font-weight:bold;letter-spacing:1.25px;line-height:1.3;text-transform:uppercase;">MADE TO REUSE</p>
-                      <h2 style="margin:0 0 10px;color:#17211b;font-family:Georgia,'Times New Roman',serif;font-size:23px;font-weight:normal;letter-spacing:-.5px;line-height:1.15;">A branded finish, order after order.</h2>
-                      <a href="${escapeHtml(config.storeUrl)}/collections/all" style="color:#1a694b;font-size:13px;font-weight:bold;line-height:1.4;text-decoration:underline;">Explore Printmivo</a>
+                      <p style="margin:0 0 8px;color:#15714e;font-size:10px;font-weight:bold;letter-spacing:1.25px;line-height:1.3;text-transform:uppercase;">MAKE IT YOURS</p>
+                      <h2 style="margin:0 0 8px;color:#17211b;font-family:Georgia,'Times New Roman',serif;font-size:23px;font-weight:normal;letter-spacing:-.5px;line-height:1.15;">Custom Logo Stickers</h2>
+                      <p style="margin:0 0 12px;color:#435148;font-size:13px;line-height:1.45;">A finishing touch for every package you send.</p>
+                      <a href="${stickerUrl}" style="color:#1a694b;font-size:13px;font-weight:bold;line-height:1.4;text-decoration:underline;">Shop custom stickers</a>
                     </td>
                     <td width="50%" valign="top" style="width:50%;padding:0;">
-                      <img src="${afterBrandingImageUrl}" width="300" alt="Branded packaging with a custom Printmivo mark" style="display:block;width:100%;height:auto;border:0;outline:none;text-decoration:none;">
+                      <a href="${stickerUrl}" style="display:block;text-decoration:none;"><img src="${stickerImageUrl}" width="300" height="205" alt="Custom Logo Stickers — 500 pcs" style="display:block;width:100%;height:auto;border:0;outline:none;text-decoration:none;"></a>
                     </td>
                   </tr>
                 </table>
@@ -167,7 +171,7 @@ function layout({ preheader, heading, copy, ctaLabel, ctaUrl, email, campaignTyp
             </tr>
             <tr>
               <td style="padding:16px 0 0;">
-                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="border-collapse:collapse;background-color:#173f31;border-radius:16px;">
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" bgcolor="#173f31" style="border-collapse:collapse;background-color:#173f31;background-image:linear-gradient(#173f31,#173f31);border-radius:16px;">
                   <tr>
                     <td align="center" style="padding:30px 28px 32px;">
                       <p style="margin:0 0 8px;color:#a9d8b9;font-size:10px;font-weight:bold;letter-spacing:1.45px;line-height:1.3;text-transform:uppercase;">PRINTMIVO</p>
