@@ -10,7 +10,7 @@ import { contactFromMarketingWebhook, contactFromOrder } from './webhooks.js';
 
 const app = express();
 const dashboardDir = path.join(process.cwd(), 'public', 'app');
-const campaignTypes = new Set(['abandoned_checkout', 'post_purchase_upsell']);
+const campaignTypes = new Set(['abandoned_checkout', 'abandoned_checkout_follow_up', 'post_purchase_upsell']);
 
 function rawWebhook(handler) {
   return [express.raw({ type: 'application/json' }), async (request, response) => {
@@ -31,11 +31,15 @@ function rawWebhook(handler) {
 function isSetting(value) {
   const validStrings = ['subject', 'preheader', 'heading', 'body', 'ctaLabel', 'ctaUrl']
     .every(key => typeof value?.[key] === 'string' && value[key].trim().length > 0 && value[key].length <= 2000);
+  const template = value?.template ?? {};
+  const validTemplate = ['heroEnabled', 'recommendationsEnabled', 'footerEnabled']
+    .every(key => typeof template[key] === 'boolean');
   return Boolean(value && typeof value.enabled === 'boolean'
     && Number.isInteger(value.delayMinutes) && value.delayMinutes >= 5 && value.delayMinutes <= 43200
     && Number.isInteger(value.cooldownDays) && value.cooldownDays >= 1 && value.cooldownDays <= 90
     && validStrings
-    && (/^https?:\/\//.test(value.ctaUrl) || value.ctaUrl === '{{recovery_url}}'));
+    && (/^https?:\/\//.test(value.ctaUrl) || value.ctaUrl === '{{recovery_url}}')
+    && validTemplate);
 }
 
 app.get('/health', async (_request, response) => response.json({ ok: true, emailMode: config.emailMode, jobs: await jobCounts() }));

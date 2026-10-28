@@ -67,6 +67,21 @@ export async function processDueJobs() {
       const email = renderEmail(job, setting);
       const delivery = await deliverEmail({ to: job.recipient_email, ...email });
       await markSent(job.id, delivery.id);
+      // A recovery email starts a deterministic second branch. The job stays
+      // safe and idempotent, then exits automatically if an order appears.
+      if (job.campaign_type === 'abandoned_checkout') {
+        const followUp = await getCampaignSettings('abandoned_checkout_follow_up');
+        if (followUp?.enabled) {
+          await enqueueCampaign({
+            campaignType: 'abandoned_checkout_follow_up',
+            sourceId: job.source_id,
+            recipientEmail: job.recipient_email,
+            recipientName: job.recipient_name,
+            payload: { ...job.payload, recoveryStartedAt: new Date().toISOString() },
+            dueAt: dueInMinutes(followUp.delayMinutes)
+          });
+        }
+      }
       summary.sent += 1;
     } catch (error) {
       await markFailed(job.id, error);

@@ -1,137 +1,49 @@
+// @ts-nocheck
 import React, { useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import './styles.css';
 
-const labelFor = {
-  abandoned_checkout: 'Abandoned checkout',
-  post_purchase_upsell: 'Post-purchase upsell'
+const order = ['abandoned_checkout', 'abandoned_checkout_follow_up', 'post_purchase_upsell'];
+const meta = {
+  abandoned_checkout: { label: 'Recovery email', event: 'Cart abandoned', detail: 'Bring shoppers back while their purchase intent is fresh.', icon: '↗' },
+  abandoned_checkout_follow_up: { label: 'Follow-up email', event: 'No purchase after recovery', detail: 'A final, respectful reminder only if they have not ordered.', icon: '↻' },
+  post_purchase_upsell: { label: 'Cross-sell email', event: 'Order paid', detail: 'Introduce useful next products after a completed order.', icon: '✦' }
 };
-
-const descriptionFor = {
-  abandoned_checkout: 'Bring shoppers back while their intent is still high.',
-  post_purchase_upsell: 'Introduce useful next products after a completed order.'
+const defaultTemplate = { heroEnabled: true, recommendationsEnabled: true, footerEnabled: true };
+const defaults = {
+  abandoned_checkout: { campaignType: 'abandoned_checkout', enabled: true, delayMinutes: 90, cooldownDays: 7, subject: 'Your Printmivo order is waiting', preheader: 'Your custom stamp is ready when you are.', heading: 'Still thinking it over{{first_name}}?', body: 'Your selected Printmivo items are still saved. Finish checkout whenever you are ready.', ctaLabel: 'Return to checkout', ctaUrl: '{{recovery_url}}', template: defaultTemplate },
+  abandoned_checkout_follow_up: { campaignType: 'abandoned_checkout_follow_up', enabled: true, delayMinutes: 1440, cooldownDays: 7, subject: 'A little reminder from Printmivo', preheader: 'Your custom stamp is still ready when you are.', heading: 'Your custom stamp is still waiting{{first_name}}', body: 'Your saved Printmivo items are ready whenever you are. Complete your order when the timing feels right.', ctaLabel: 'Return to checkout', ctaUrl: '{{recovery_url}}', template: { ...defaultTemplate, recommendationsEnabled: false } },
+  post_purchase_upsell: { campaignType: 'post_purchase_upsell', enabled: true, delayMinutes: 10080, cooldownDays: 7, subject: 'Complete your Printmivo kit', preheader: 'A few finishing touches for your next order.', heading: 'A useful next step{{first_name}}', body: 'Keep your branding consistent with practical add-ons picked for your recent Printmivo order.', ctaLabel: 'Shop recommended add-ons', ctaUrl: 'https://printmivo.com/collections/all', template: defaultTemplate }
 };
+function normalize(items = []) { const received = Object.fromEntries(items.map(item => [item.campaignType, { ...item, template: { ...defaultTemplate, ...(item.template || {}) } }])); return Object.fromEntries(order.map(key => [key, received[key] || { ...defaults[key], template: { ...defaults[key].template } }])); }
+async function api(path, options = {}) { const token = await window.shopify?.idToken?.(); const response = await fetch(path, { ...options, headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(options.headers || {}) } }); const data = await response.json().catch(() => ({})); if (!response.ok) throw new Error(data.error || 'Something went wrong.'); return data; }
+function delay(minutes) { if (!Number.isFinite(minutes)) return '—'; if (minutes % 1440 === 0) return `${minutes / 1440} day${minutes === 1440 ? '' : 's'}`; if (minutes % 60 === 0) return `${minutes / 60} hr`; return `${minutes} min`; }
+function count(summary, type, status) { return summary?.counts?.[type]?.[status] || 0; }
+function total(summary, status) { return order.reduce((sum, type) => sum + count(summary, type, status), 0); }
 
-const emptySettings = {
-  abandoned_checkout: { campaignType: 'abandoned_checkout', enabled: true, delayMinutes: 90, cooldownDays: 7, subject: 'Your Printmivo order is waiting', preheader: 'Your custom stamp is ready when you are.', heading: 'Still thinking it over{{first_name}}?', body: 'Your selected Printmivo items are still saved. Finish checkout whenever you are ready.', ctaLabel: 'Return to checkout', ctaUrl: '{{recovery_url}}' },
-  post_purchase_upsell: { campaignType: 'post_purchase_upsell', enabled: true, delayMinutes: 10080, cooldownDays: 7, subject: 'Complete your Printmivo kit', preheader: 'A few finishing touches for your next order.', heading: 'A useful next step{{first_name}}', body: 'Keep your branding consistent with practical add-ons picked for your recent Printmivo order.', ctaLabel: 'Shop recommended add-ons', ctaUrl: 'https://printmivo.com/collections/all' }
-};
-
-async function authenticatedFetch(path, options = {}) {
-  const token = await window.shopify?.idToken?.();
-  const response = await fetch(path, {
-    ...options,
-    headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(options.headers || {}) }
-  });
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(data.error || 'Something went wrong.');
-  return data;
-}
-
-function formatDelay(minutes) {
-  if (minutes % 1440 === 0) return `${minutes / 1440} day${minutes === 1440 ? '' : 's'}`;
-  if (minutes % 60 === 0) return `${minutes / 60} hr`;
-  return `${minutes} min`;
-}
-
-function Stat({ value, label, tone = 'dark' }) {
-  return <div className={`stat ${tone}`}><strong>{value}</strong><span>{label}</span></div>;
-}
-
-function CampaignRow({ setting, summary, onSelect, active }) {
-  const sent = summary?.counts?.[setting.campaignType]?.sent || 0;
-  const queued = summary?.counts?.[setting.campaignType]?.queued || 0;
-  return <button className={`campaign-row ${active ? 'active' : ''}`} onClick={() => onSelect(setting.campaignType)}>
-    <span className="campaign-icon">{setting.campaignType === 'abandoned_checkout' ? '↗' : '✦'}</span>
-    <span className="campaign-copy"><strong>{labelFor[setting.campaignType]}</strong><small>{descriptionFor[setting.campaignType]}</small></span>
-    <span className="campaign-status"><i className={setting.enabled ? 'dot on' : 'dot'}></i>{setting.enabled ? 'Active' : 'Paused'}</span>
-    <span className="campaign-number"><b>{queued}</b><small>queued</small></span>
-    <span className="campaign-number"><b>{sent}</b><small>sent</small></span>
-    <span className="campaign-chevron">›</span>
-  </button>;
-}
+function Metric({ label, value, hint, green }) { return <article className="metric"><span>{label}</span><strong className={green ? 'green' : ''}>{value.toLocaleString()}</strong><small>{hint}</small></article>; }
+function Toggle({ checked, onChange, label, description }) { return <label className="toggle"><span><b>{label}</b>{description && <small>{description}</small>}</span><input type="checkbox" checked={checked} onChange={event => onChange(event.target.checked)} /><i /></label>; }
+function Node({ type, title, detail, selected, onClick }) { return <button type="button" className={`node ${type} ${selected ? 'selected' : ''}`} onClick={onClick}><i>{type === 'event' ? '◉' : type === 'wait' ? '◷' : type === 'decision' ? '◇' : type === 'exit' ? '✓' : '✉'}</i><span><b>{title}</b><small>{detail}</small></span></button>; }
+function Preview({ setting }) { const t = setting.template || defaultTemplate; return <div className="mail"><header>PRINTMIVO <i>Preview</i></header>{t.heroEnabled && <div className="mail-hero"><span>YOUR BRAND</span><b>Made to be remembered.</b></div>}<section><em>{setting.preheader}</em><h3>{setting.heading.replace('{{first_name}}', ' Avery')}</h3><p>{setting.body}</p><button>{setting.ctaLabel} →</button></section>{t.recommendationsEnabled && <div className="recommendations"><span>Permanent Refill Ink</span><span>Custom Stickers</span></div>}{t.footerEnabled && <footer>Thoughtful details. Professional results.<br />Unsubscribe</footer>}</div>; }
 
 function App() {
-  const [settings, setSettings] = useState(emptySettings);
-  const [savedSettings, setSavedSettings] = useState(emptySettings);
-  const [summary, setSummary] = useState({ audience: { subscribed: 0, suppressed: 0 }, counts: {}, recent: [] });
-  const [selected, setSelected] = useState('abandoned_checkout');
-  const [mode, setMode] = useState('preview');
-  const [notice, setNotice] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [testEmail, setTestEmail] = useState('');
-  const [testDialogOpen, setTestDialogOpen] = useState(false);
-  const [sendingTest, setSendingTest] = useState(false);
-
-  const setting = settings[selected];
-  const activity = useMemo(() => summary.recent.slice(0, 5), [summary]);
-
-  useEffect(() => {
-    authenticatedFetch('/api/admin/dashboard')
-      .then(data => {
-        if (!Array.isArray(data.settings) || !data.summary) throw new Error('Open Email studio from Shopify Admin to connect your secure session.');
-        const loadedSettings = Object.fromEntries(data.settings.map(item => [item.campaignType, item]));
-        setSettings(loadedSettings);
-        setSavedSettings(loadedSettings);
-        setSummary(data.summary);
-        setMode(data.mode);
-      })
-      .catch(error => setNotice(error.message))
-      .finally(() => setLoading(false));
-  }, []);
-
-  function updateField(key, value) {
-    setSettings(current => ({ ...current, [selected]: { ...current[selected], [key]: value } }));
-  }
-
-  async function saveCampaign() {
-    try {
-      const data = await authenticatedFetch(`/api/admin/campaigns/${selected}`, { method: 'PUT', body: JSON.stringify(setting) });
-      setSettings(current => ({ ...current, [selected]: data.setting }));
-      setSavedSettings(current => ({ ...current, [selected]: data.setting }));
-      setNotice('Changes saved. New jobs will follow this campaign setup.');
-    } catch (error) { setNotice(error.message); }
-  }
-
-  async function sendTest() {
-    if (!/^\S+@\S+\.\S+$/.test(testEmail.trim())) {
-      setNotice('Enter a valid email address for the test.');
-      return;
-    }
-    setSendingTest(true);
-    try {
-      const data = await authenticatedFetch(`/api/admin/campaigns/${selected}/test`, { method: 'POST', body: JSON.stringify({ email: testEmail }) });
-      setNotice(data.mode === 'preview' ? 'Preview logged safely. Set EMAIL_MODE=live to deliver through Resend.' : 'Test email sent. Check the inbox you entered.');
-      setTestDialogOpen(false);
-    } catch (error) { setNotice(error.message); }
-    finally { setSendingTest(false); }
-  }
-
-  return <main className="app-shell">
-    <header className="topbar"><div className="brand-mark">p</div><div><strong>Printmivo</strong><span>Email studio</span></div><div className="topbar-right"><span className={`mode ${mode}`}>{mode === 'live' ? 'Live sending' : 'Preview mode'}</span><span className="avatar">A</span></div></header>
-    <div className="layout">
-      <aside className="sidebar"><span className="eyebrow">AUTOMATION</span><button className="nav-item active">Overview</button><button className="nav-item">Campaigns</button><button className="nav-item">Audience</button><div className="sidebar-bottom"><button className="nav-item">Settings</button><small>Respectful email, by default.</small></div></aside>
-      <section className="content">
-        <div className="hero"><div><span className="eyebrow">EMAIL AUTOMATIONS</span><h1>Keep the conversation<br/>moving.</h1><p>Send helpful follow-ups at the right moment—without losing the feel of your brand.</p></div><div className="hero-note"><span className="spark">✦</span><strong>Automations run quietly in the background.</strong><small>Every email honours consent and frequency limits.</small></div></div>
-        {notice && <div className="notice"><span>●</span>{notice}<button onClick={() => setNotice('')}>×</button></div>}
-        <div className="stats"><Stat value={summary.audience.subscribed.toLocaleString()} label="marketing subscribers"/><Stat value={Object.values(summary.counts).reduce((total, item) => total + (item.sent || 0), 0).toLocaleString()} label="emails sent" tone="green"/><Stat value={Object.values(summary.counts).reduce((total, item) => total + (item.queued || 0), 0).toLocaleString()} label="waiting to send"/><Stat value={summary.audience.suppressed.toLocaleString()} label="unsubscribed"/></div>
-        <section className="panel campaign-panel"><div className="panel-heading"><div><span className="eyebrow">YOUR FLOWS</span><h2>Campaigns</h2></div><span className="subtle">Only opted-in shoppers are eligible.</span></div>{Object.values(settings).map(item => <CampaignRow key={item.campaignType} setting={item} summary={summary} active={selected === item.campaignType} onSelect={setSelected}/>)}</section>
-        <section className="editor-grid"><div className="panel editor"><div className="panel-heading"><div><span className="eyebrow">EDITING</span><h2>{labelFor[selected]}</h2></div><label className="switch"><input type="checkbox" checked={setting.enabled} onChange={event => updateField('enabled', event.target.checked)}/><span></span>{setting.enabled ? 'On' : 'Off'}</label></div><p className="editor-intro">{descriptionFor[selected]}</p><div className="timing"><label><span>Send after</span><input type="number" min="5" value={setting.delayMinutes} onChange={event => updateField('delayMinutes', Number(event.target.value))}/><small>minutes · {formatDelay(setting.delayMinutes)}</small></label><label><span>Frequency cap</span><input type="number" min="1" max="90" value={setting.cooldownDays} onChange={event => updateField('cooldownDays', Number(event.target.value))}/><small>days between marketing emails</small></label></div><div className="field"><label>Subject line</label><input value={setting.subject} onChange={event => updateField('subject', event.target.value)}/></div><div className="field"><label>Preview text</label><input value={setting.preheader} onChange={event => updateField('preheader', event.target.value)}/></div><div className="field"><label>Headline</label><input value={setting.heading} onChange={event => updateField('heading', event.target.value)}/></div><div className="field"><label>Message</label><textarea rows="4" value={setting.body} onChange={event => updateField('body', event.target.value)}/></div><div className="two-fields"><div className="field"><label>Button label</label><input value={setting.ctaLabel} onChange={event => updateField('ctaLabel', event.target.value)}/></div><div className="field"><label>Destination</label><input value={setting.ctaUrl} onChange={event => updateField('ctaUrl', event.target.value)}/></div></div><div className="editor-actions"><button className="button secondary" onClick={() => setSettings(current => ({ ...current, [selected]: savedSettings[selected] }))}>Reset</button><button className="button primary" onClick={saveCampaign}>Save changes</button></div></div>
-        <div className="right-column"><section className="panel preview"><div className="panel-heading"><div><span className="eyebrow">LIVE PREVIEW</span><h2>In their inbox</h2></div><span className="phone-dot"></span></div><div className="mail-card"><div className="mail-brand">PRINTMIVO</div><small>{setting.preheader}</small><h3>{setting.heading.replace('{{first_name}}', ' Avery')}</h3><p>{setting.body}</p><button>{setting.ctaLabel}</button><div className="mail-footer">Thoughtful branding, made easy.<br/>Unsubscribe</div></div></section><section className="panel test-send"><span className="eyebrow">CHECK BEFORE YOU SEND</span><h2>Send a test</h2><p>Send the selected campaign's exact saved email to yourself before it reaches customers.</p><button className="button dark" onClick={() => setTestDialogOpen(true)}>Send test email</button></section></div></section>
-        <section className="panel activity"><div className="panel-heading"><div><span className="eyebrow">DELIVERY LOG</span><h2>Recent activity</h2></div><span className="subtle">Last 8 automation events</span></div>{loading ? <p className="empty">Loading your latest campaign activity…</p> : activity.length ? <div className="activity-list">{activity.map((item, index) => <div className="activity-row" key={`${item.recipient}-${index}`}><span className={`status-dot ${item.status}`}></span><strong>{labelFor[item.campaignType]}</strong><span>{item.recipient}</span><span>{item.status}</span><time>{new Date(item.timestamp).toLocaleDateString()}</time></div>)}</div> : <p className="empty">Your delivery history will appear here after the first campaign run.</p>}</section>
-      </section>
-    </div>
-    {testDialogOpen && <div className="dialog-backdrop" role="presentation" onMouseDown={() => !sendingTest && setTestDialogOpen(false)}>
-      <section className="test-dialog" role="dialog" aria-modal="true" aria-labelledby="test-dialog-title" onMouseDown={event => event.stopPropagation()}>
-        <button className="dialog-close" aria-label="Close test email dialog" onClick={() => setTestDialogOpen(false)} disabled={sendingTest}>×</button>
-        <span className="eyebrow">TEST DELIVERY</span>
-        <h2 id="test-dialog-title">Send yourself the {labelFor[selected].toLowerCase()} email</h2>
-        <p>This sends the same saved subject, message, CTA and unsubscribe footer your customer would receive.</p>
-        <label className="field"><span>Email address</span><input autoFocus type="email" placeholder="you@company.com" value={testEmail} onChange={event => setTestEmail(event.target.value)} onKeyDown={event => { if (event.key === 'Enter') sendTest(); }}/></label>
-        <div className="dialog-actions"><button className="button secondary" onClick={() => setTestDialogOpen(false)} disabled={sendingTest}>Cancel</button><button className="button primary" onClick={sendTest} disabled={sendingTest}>{sendingTest ? 'Sending…' : 'Send test email'}</button></div>
-      </section>
-    </div>}
-  </main>;
+  const [settings, setSettings] = useState(() => normalize()); const [saved, setSaved] = useState(() => normalize()); const [summary, setSummary] = useState({ audience: { subscribed: 0, suppressed: 0 }, counts: {}, recent: [] });
+  const [section, setSection] = useState('overview'); const [selected, setSelected] = useState('abandoned_checkout'); const [tab, setTab] = useState('content'); const [mode, setMode] = useState('preview'); const [notice, setNotice] = useState(''); const [loading, setLoading] = useState(true); const [dialog, setDialog] = useState(false); const [testEmail, setTestEmail] = useState(''); const [sending, setSending] = useState(false);
+  const setting = settings[selected]; const sent = total(summary, 'sent'); const queued = total(summary, 'queued'); const skipped = total(summary, 'skipped'); const recent = useMemo(() => summary.recent.slice(0, 6), [summary]);
+  useEffect(() => { api('/api/admin/dashboard').then(data => { if (!Array.isArray(data.settings)) throw new Error('Open Email Studio from Shopify Admin to connect your secure session.'); const next = normalize(data.settings); setSettings(next); setSaved(next); setSummary(data.summary); setMode(data.mode); }).catch(error => setNotice(error.message)).finally(() => setLoading(false)); }, []);
+  const edit = (key, value) => setSettings(current => ({ ...current, [selected]: { ...current[selected], [key]: value } }));
+  const editTemplate = (key, value) => edit('template', { ...(setting.template || defaultTemplate), [key]: value });
+  const choose = type => { setSelected(type); setSection('automations'); };
+  async function save() { try { const data = await api(`/api/admin/campaigns/${selected}`, { method: 'PUT', body: JSON.stringify(setting) }); const next = { ...data.setting, template: { ...defaultTemplate, ...(data.setting.template || {}) } }; setSettings(current => ({ ...current, [selected]: next })); setSaved(current => ({ ...current, [selected]: next })); setNotice('Saved. New jobs will follow this branch and template.'); } catch (error) { setNotice(error.message); } }
+  async function sendTest() { if (!/^\S+@\S+\.\S+$/.test(testEmail.trim())) { setNotice('Enter a valid email address for the test.'); return; } setSending(true); try { const data = await api(`/api/admin/campaigns/${selected}/test`, { method: 'POST', body: JSON.stringify({ email: testEmail }) }); setNotice(data.mode === 'preview' ? 'Preview recorded safely. Set EMAIL_MODE=live to send through Resend.' : 'Test email sent. Check the inbox you entered.'); setDialog(false); } catch (error) { setNotice(error.message); } finally { setSending(false); } }
+  return <main className="studio">
+    <header className="topbar"><button className="brand" onClick={() => setSection('overview')}><i>p</i><span><b>Printmivo</b><small>Email Studio</small></span></button><div><span className={`mode ${mode}`}>● {mode === 'live' ? 'Live sending' : 'Preview mode'}</span><button className="send-test" onClick={() => setDialog(true)}>Send test</button><em className="avatar">A</em></div></header>
+    <div className="layout"><nav><p>WORKSPACE</p>{[['overview', '⌂', 'Overview'], ['automations', '⌘', 'Automations'], ['templates', '▤', 'Templates'], ['audience', '◌', 'Audience'], ['insights', '⌁', 'Insights']].map(([id, icon, label]) => <button key={id} className={section === id ? 'active' : ''} onClick={() => setSection(id)}><i>{icon}</i>{label}</button>)}<aside><i>✦</i><b>Consent first</b><small>Only subscribed customers enter a flow. Every message has an unsubscribe link.</small></aside></nav>
+      <section className="content">{notice && <div className="notice"><span>●</span>{notice}<button onClick={() => setNotice('')}>×</button></div>}<header className="heading"><div><span>EMAIL AUTOMATIONS</span><h1>{section === 'overview' ? <>The right message,<br />at the right moment.</> : section === 'automations' ? 'Automation builder' : section === 'templates' ? 'Template studio' : section === 'audience' ? 'Audience health' : 'Delivery insights'}</h1><p>{section === 'overview' ? 'Build a thoughtful follow-up journey that knows when to stop.' : 'Control each message, timing rule, and stop condition from one calm workspace.'}</p></div><aside><b>{settings.abandoned_checkout.enabled ? 'Recovery live' : 'Recovery paused'}</b><small>Saved rules apply to new jobs.</small></aside></header>
+      {section === 'overview' && <><div className="metrics"><Metric label="Marketing subscribers" value={summary.audience.subscribed} hint="eligible audience" /><Metric label="Emails sent" value={sent} hint="automation delivery" green /><Metric label="Waiting in flows" value={queued} hint="scheduled to send" /><Metric label="Stopped safely" value={skipped} hint="purchased, opted out, or capped" /></div><section className="journey card"><header className="card-head"><div><span>JOURNEY MAP</span><h2>Abandoned checkout recovery</h2></div><button onClick={() => choose('abandoned_checkout')}>Edit recovery flow →</button></header><div className="canvas"><div className="flow"><Node type="event" title="Cart abandoned" detail="Email captured at checkout" /><div className="line"><small>{delay(settings.abandoned_checkout.delayMinutes)}</small></div><Node type="email" title="Recovery email" detail={settings.abandoned_checkout.enabled ? 'Active' : 'Paused'} selected onClick={() => choose('abandoned_checkout')} /><div className="line"><small>then check</small></div><Node type="decision" title="Did they purchase?" detail="Order webhook decides" /><div className="branches"><div><b>Yes</b><Node type="exit" title="Exit flow" detail="No further email" /></div><div><b>No</b><div className="follow"><small>wait {delay(settings.abandoned_checkout_follow_up.delayMinutes)}</small><Node type="email" title="Follow-up email" detail={settings.abandoned_checkout_follow_up.enabled ? 'Active' : 'Paused'} onClick={() => choose('abandoned_checkout_follow_up')} /><small>if still open → exit</small></div></div></div></div><aside className="flow-health"><span>FLOW HEALTH</span><div><b>{count(summary, 'abandoned_checkout', 'sent') + count(summary, 'abandoned_checkout_follow_up', 'sent')}</b><small>recovery emails sent</small></div><div><b>{count(summary, 'abandoned_checkout', 'queued') + count(summary, 'abandoned_checkout_follow_up', 'queued')}</b><small>customers waiting</small></div><p>Purchase detection stops the next email before it sends.</p></aside></div></section><div className="grid"><section className="card compact"><header className="card-head"><div><span>SECOND JOURNEY</span><h2>Post-purchase upsell</h2></div><button onClick={() => choose('post_purchase_upsell')}>Edit →</button></header><div className="mini-flow"><Node type="event" title="Order paid" detail="Subscribed customer" /><i>→</i><small>{delay(settings.post_purchase_upsell.delayMinutes)}</small><i>→</i><Node type="email" title="Cross-sell email" detail={settings.post_purchase_upsell.enabled ? 'Active' : 'Paused'} onClick={() => choose('post_purchase_upsell')} /></div><p>Frequency limits apply across all marketing emails.</p></section><section className="card compact"><header className="card-head"><div><span>REPORTING</span><h2>Delivery health</h2></div><b className="live">Live data</b></header><div className="health"><div><b>{total(summary, 'failed')}</b><small>failed deliveries</small></div><div><b>{summary.audience.suppressed}</b><small>unsubscribed</small></div><div><b>—</b><small>opens & clicks*</small></div></div><p>*Open and click metrics need Resend event webhooks. We never estimate them.</p></section></div></>}
+      {(section === 'automations' || section === 'templates') && <div className="builder"><section className="flows card"><header><span>YOUR FLOWS</span><small>Choose a step to edit</small></header>{order.map(type => <button key={type} className={selected === type ? 'selected' : ''} onClick={() => setSelected(type)}><i>{meta[type].icon}</i><span><b>{meta[type].label}</b><small>{meta[type].detail}</small></span><em className={settings[type].enabled ? 'on' : ''}>{settings[type].enabled ? 'On' : 'Off'}</em></button>)}<aside><i>✓</i><p><b>Purchase is always an exit</b><small>A matching order skips the next abandoned-cart email.</small></p></aside></section><section className="editor card"><header><div><span>{section === 'templates' ? 'TEMPLATE EDITOR' : 'AUTOMATION STEP'}</span><h2>{meta[selected].label}</h2><p>{meta[selected].detail}</p></div><Toggle checked={setting.enabled} onChange={value => edit('enabled', value)} label={setting.enabled ? 'Enabled' : 'Paused'} /></header><div className="tabs"><button className={tab === 'content' ? 'active' : ''} onClick={() => setTab('content')}>Content</button><button className={tab === 'template' ? 'active' : ''} onClick={() => setTab('template')}>Template</button><button className={tab === 'delivery' ? 'active' : ''} onClick={() => setTab('delivery')}>Delivery</button></div>{tab === 'content' && <div className="fields"><label>Subject line<input value={setting.subject} onChange={e => edit('subject', e.target.value)} /></label><label>Preview text<input value={setting.preheader} onChange={e => edit('preheader', e.target.value)} /></label><label>Headline<input value={setting.heading} onChange={e => edit('heading', e.target.value)} /></label><label>Message<textarea rows="5" value={setting.body} onChange={e => edit('body', e.target.value)} /></label><div><label>Button label<input value={setting.ctaLabel} onChange={e => edit('ctaLabel', e.target.value)} /></label><label>Destination<input value={setting.ctaUrl} onChange={e => edit('ctaUrl', e.target.value)} /></label></div></div>}{tab === 'template' && <div className="template-controls"><div><b>Build a focused email</b><p>Each module is designed for inbox compatibility. Turn it on only when it helps the customer decide.</p></div><Toggle checked={setting.template.heroEnabled} onChange={value => editTemplate('heroEnabled', value)} label="Product hero" description="Feature the product they were viewing." /><Toggle checked={setting.template.recommendationsEnabled} onChange={value => editTemplate('recommendationsEnabled', value)} label="Useful add-ons" description="Show permanent refill ink and custom stickers." /><Toggle checked={setting.template.footerEnabled} onChange={value => editTemplate('footerEnabled', value)} label="Brand footer" description="Finish with a Printmivo brand moment." /></div>}{tab === 'delivery' && <div className="delivery"><label>Send after<div><input type="number" min="5" value={setting.delayMinutes} onChange={e => edit('delayMinutes', Number(e.target.value))} /><span>minutes</span></div><small>{delay(setting.delayMinutes)} after {meta[selected].event.toLowerCase()}.</small></label><label>Frequency cap<div><input type="number" min="1" max="90" value={setting.cooldownDays} onChange={e => edit('cooldownDays', Number(e.target.value))} /><span>days</span></div><small>Limits how often an eligible customer receives marketing email.</small></label><aside><b>What happens next?</b><p>{selected === 'abandoned_checkout' ? `After this sends, Printmivo waits ${delay(settings.abandoned_checkout_follow_up.delayMinutes)}. A purchase exits; no purchase considers the follow-up.` : selected === 'abandoned_checkout_follow_up' ? 'This is the final recovery step. Both purchase and no purchase exit the journey afterwards.' : 'After delivery, this journey exits. A future eligible order can begin a new journey.'}</p></aside></div>}<footer><button onClick={() => setSettings(current => ({ ...current, [selected]: saved[selected] }))}>Reset changes</button><button className="primary" onClick={save}>Save step</button></footer></section><aside className="preview card"><header><div><span>INBOX PREVIEW</span><h2>{meta[selected].label}</h2></div><button onClick={() => setDialog(true)}>Send test</button></header><Preview setting={setting} /><p>Tests use this campaign’s saved template and unsubscribe footer.</p></aside></div>}
+      {section === 'audience' && <div className="grid audience"><section className="card compact"><span>AUDIENCE SAFETY</span><h2>Only respectful messages leave the studio.</h2><div className="health"><div><b>{summary.audience.subscribed}</b><small>Subscribed and eligible</small></div><div><b>{summary.audience.suppressed}</b><small>Unsubscribed / suppressed</small></div><div><b>{queued}</b><small>Currently scheduled</small></div></div></section><section className="card compact"><span>HOW IT WORKS</span><ol><li>Shopify provides an email after a shopper shares it.</li><li>Marketing consent is re-checked at send time.</li><li>Suppression and frequency caps are re-checked too.</li></ol></section></div>}
+      {section === 'insights' && <section className="activity card"><header className="card-head"><div><span>RECENT AUTOMATION EVENTS</span><h2>Delivery activity</h2></div><b className="live">Updated from jobs</b></header>{loading ? <p>Loading delivery history…</p> : recent.length ? <div>{recent.map((item, index) => <article key={`${item.recipient}-${index}`}><i className={item.status} /><b>{meta[item.campaignType]?.label || item.campaignType}</b><span>{item.recipient}</span><em>{item.status}</em><time>{new Date(item.timestamp).toLocaleDateString()}</time></article>)}</div> : <p>Your delivery history will appear here after the first automation run.</p>}</section>}
+      </section></div>{dialog && <div className="modal" onMouseDown={() => !sending && setDialog(false)}><section onMouseDown={e => e.stopPropagation()}><button className="close" onClick={() => setDialog(false)} disabled={sending}>×</button><span>TEST DELIVERY</span><h2>Send the {meta[selected].label.toLowerCase()}</h2><p>This sends the exact saved content, template switches and unsubscribe footer to your inbox.</p><label>Email address<input autoFocus type="email" placeholder="you@company.com" value={testEmail} onChange={e => setTestEmail(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') sendTest(); }} /></label><footer><button onClick={() => setDialog(false)} disabled={sending}>Cancel</button><button className="primary" onClick={sendTest} disabled={sending}>{sending ? 'Sending…' : 'Send test'}</button></footer></section></div>}</main>;
 }
-
-createRoot(document.getElementById('root')).render(<App/>);
+createRoot(document.getElementById('root')).render(<App />);

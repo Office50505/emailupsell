@@ -26,7 +26,7 @@ CREATE TABLE IF NOT EXISTS email_orders (
 CREATE TABLE IF NOT EXISTS email_campaign_jobs (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   shop_domain TEXT NOT NULL,
-  campaign_type TEXT NOT NULL CHECK (campaign_type IN ('abandoned_checkout', 'post_purchase_upsell')),
+  campaign_type TEXT NOT NULL CHECK (campaign_type IN ('abandoned_checkout', 'abandoned_checkout_follow_up', 'post_purchase_upsell')),
   source_id TEXT NOT NULL,
   recipient_email TEXT NOT NULL,
   recipient_name TEXT,
@@ -50,7 +50,7 @@ CREATE INDEX IF NOT EXISTS email_campaign_jobs_recipient_idx
 
 CREATE TABLE IF NOT EXISTS email_campaign_settings (
   shop_domain TEXT NOT NULL,
-  campaign_type TEXT NOT NULL CHECK (campaign_type IN ('abandoned_checkout', 'post_purchase_upsell')),
+  campaign_type TEXT NOT NULL CHECK (campaign_type IN ('abandoned_checkout', 'abandoned_checkout_follow_up', 'post_purchase_upsell')),
   enabled BOOLEAN NOT NULL DEFAULT TRUE,
   delay_minutes INTEGER NOT NULL CHECK (delay_minutes BETWEEN 5 AND 43200),
   cooldown_days INTEGER NOT NULL DEFAULT 7 CHECK (cooldown_days BETWEEN 1 AND 90),
@@ -60,6 +60,49 @@ CREATE TABLE IF NOT EXISTS email_campaign_settings (
   body TEXT NOT NULL,
   cta_label TEXT NOT NULL,
   cta_url TEXT NOT NULL,
+  template_json JSONB NOT NULL DEFAULT '{"heroEnabled":true,"recommendationsEnabled":true,"footerEnabled":true}'::jsonb,
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   PRIMARY KEY (shop_domain, campaign_type)
 );
+
+-- Safe upgrades for the first two-flow release. Railway runs this schema on
+-- every boot, so existing installations gain the follow-up path in place.
+ALTER TABLE email_campaign_settings
+  ADD COLUMN IF NOT EXISTS template_json JSONB NOT NULL
+  DEFAULT '{"heroEnabled":true,"recommendationsEnabled":true,"footerEnabled":true}'::jsonb;
+
+DO $$
+DECLARE constraint_name TEXT;
+BEGIN
+  SELECT conname INTO constraint_name
+  FROM pg_constraint
+  WHERE conrelid = 'email_campaign_jobs'::regclass
+    AND contype = 'c'
+    AND pg_get_constraintdef(oid) LIKE '%campaign_type%';
+
+  IF constraint_name IS NOT NULL THEN
+    EXECUTE format('ALTER TABLE email_campaign_jobs DROP CONSTRAINT %I', constraint_name);
+  END IF;
+
+  ALTER TABLE email_campaign_jobs
+    ADD CONSTRAINT email_campaign_jobs_campaign_type_check
+    CHECK (campaign_type IN ('abandoned_checkout', 'abandoned_checkout_follow_up', 'post_purchase_upsell'));
+END $$;
+
+DO $$
+DECLARE constraint_name TEXT;
+BEGIN
+  SELECT conname INTO constraint_name
+  FROM pg_constraint
+  WHERE conrelid = 'email_campaign_settings'::regclass
+    AND contype = 'c'
+    AND pg_get_constraintdef(oid) LIKE '%campaign_type%';
+
+  IF constraint_name IS NOT NULL THEN
+    EXECUTE format('ALTER TABLE email_campaign_settings DROP CONSTRAINT %I', constraint_name);
+  END IF;
+
+  ALTER TABLE email_campaign_settings
+    ADD CONSTRAINT email_campaign_settings_campaign_type_check
+    CHECK (campaign_type IN ('abandoned_checkout', 'abandoned_checkout_follow_up', 'post_purchase_upsell'));
+END $$;

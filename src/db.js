@@ -81,24 +81,25 @@ export async function sendEligibility(job, cooldownDays) {
          WHERE sent.shop_domain = $1
            AND sent.recipient_email = $2
            AND sent.status = 'sent'
+           AND NOT ($5 = 'abandoned_checkout_follow_up' AND sent.campaign_type = 'abandoned_checkout')
            AND sent.sent_at > NOW() - ($3::text || ' days')::interval
        ) AS recently_sent,
        EXISTS (
          SELECT 1 FROM email_orders orders
          WHERE orders.shop_domain = $1
            AND orders.email = $2
-           AND orders.ordered_at > $4
+           AND orders.ordered_at > COALESCE(($6::jsonb ->> 'checkoutUpdatedAt')::timestamptz, $4)
        ) AS ordered_since_due
      FROM email_contacts contacts
      WHERE contacts.shop_domain = $1 AND contacts.email = $2`,
-    [config.shopDomain, job.recipient_email, cooldownDays, job.due_at]
+    [config.shopDomain, job.recipient_email, cooldownDays, job.due_at, job.campaign_type, JSON.stringify(job.payload ?? {})]
   );
   const contact = result.rows[0];
   if (!contact) return { allowed: false, reason: 'missing_contact' };
   if (contact.marketing_state !== 'SUBSCRIBED') return { allowed: false, reason: 'not_marketing_subscribed' };
   if (contact.suppressed_at) return { allowed: false, reason: 'suppressed' };
   if (contact.recently_sent) return { allowed: false, reason: 'frequency_capped' };
-  if (job.campaign_type === 'abandoned_checkout' && contact.ordered_since_due) return { allowed: false, reason: 'ordered_after_abandonment' };
+  if (['abandoned_checkout', 'abandoned_checkout_follow_up'].includes(job.campaign_type) && contact.ordered_since_due) return { allowed: false, reason: 'ordered_after_abandonment' };
   return { allowed: true };
 }
 
@@ -141,7 +142,20 @@ const defaults = {
     heading: 'Still thinking it over{{first_name}}?',
     body: 'Your selected Printmivo items are still saved. Finish checkout whenever you are ready.',
     ctaLabel: 'Return to checkout',
-    ctaUrl: '{{recovery_url}}'
+    ctaUrl: '{{recovery_url}}',
+    template: { heroEnabled: true, recommendationsEnabled: true, footerEnabled: true }
+  },
+  abandoned_checkout_follow_up: {
+    enabled: true,
+    delayMinutes: 24 * 60,
+    cooldownDays: config.marketingCooldownDays,
+    subject: 'A little reminder from Printmivo',
+    preheader: 'Your custom stamp is still ready when you are.',
+    heading: 'Your custom stamp is still waiting{{first_name}}',
+    body: 'Your saved Printmivo items are ready whenever you are. Complete your order when the timing feels right.',
+    ctaLabel: 'Return to checkout',
+    ctaUrl: '{{recovery_url}}',
+    template: { heroEnabled: true, recommendationsEnabled: false, footerEnabled: true }
   },
   post_purchase_upsell: {
     enabled: true,
@@ -152,7 +166,8 @@ const defaults = {
     heading: 'A useful next step{{first_name}}',
     body: 'Keep your branding consistent with practical add-ons picked for your recent Printmivo order.',
     ctaLabel: 'Shop recommended add-ons',
-    ctaUrl: `${config.storeUrl}/collections/all?utm_source=printmivo-email&utm_medium=upsell&utm_campaign=post_purchase`
+    ctaUrl: `${config.storeUrl}/collections/all?utm_source=printmivo-email&utm_medium=upsell&utm_campaign=post_purchase`,
+    template: { heroEnabled: true, recommendationsEnabled: true, footerEnabled: true }
   }
 };
 
@@ -168,6 +183,7 @@ function toSetting(row) {
     body: row.body,
     ctaLabel: row.cta_label,
     ctaUrl: row.cta_url,
+    template: row.template_json ?? { heroEnabled: true, recommendationsEnabled: true, footerEnabled: true },
     updatedAt: row.updated_at
   };
 }
@@ -176,10 +192,10 @@ export async function ensureCampaignSettings() {
   for (const [campaignType, setting] of Object.entries(defaults)) {
     await pool.query(
       `INSERT INTO email_campaign_settings
-       (shop_domain, campaign_type, enabled, delay_minutes, cooldown_days, subject, preheader, heading, body, cta_label, cta_url)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+       (shop_domain, campaign_type, enabled, delay_minutes, cooldown_days, subject, preheader, heading, body, cta_label, cta_url, template_json)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::jsonb)
        ON CONFLICT (shop_domain, campaign_type) DO NOTHING`,
-      [config.shopDomain, campaignType, setting.enabled, setting.delayMinutes, setting.cooldownDays, setting.subject, setting.preheader, setting.heading, setting.body, setting.ctaLabel, setting.ctaUrl]
+      [config.shopDomain, campaignType, setting.enabled, setting.delayMinutes, setting.cooldownDays, setting.subject, setting.preheader, setting.heading, setting.body, setting.ctaLabel, setting.ctaUrl, JSON.stringify(setting.template)]
     );
   }
 }
@@ -207,10 +223,10 @@ export async function updateCampaignSettings(campaignType, setting) {
   const result = await pool.query(
     `UPDATE email_campaign_settings SET
        enabled = $3, delay_minutes = $4, cooldown_days = $5, subject = $6, preheader = $7,
-       heading = $8, body = $9, cta_label = $10, cta_url = $11, updated_at = NOW()
+       heading = $8, body = $9, cta_label = $10, cta_url = $11, template_json = $12::jsonb, updated_at = NOW()
      WHERE shop_domain = $1 AND campaign_type = $2
      RETURNING *`,
-    [config.shopDomain, campaignType, setting.enabled, setting.delayMinutes, setting.cooldownDays, setting.subject, setting.preheader, setting.heading, setting.body, setting.ctaLabel, setting.ctaUrl]
+    [config.shopDomain, campaignType, setting.enabled, setting.delayMinutes, setting.cooldownDays, setting.subject, setting.preheader, setting.heading, setting.body, setting.ctaLabel, setting.ctaUrl, JSON.stringify(setting.template ?? {})]
   );
   return result.rows[0] ? toSetting(result.rows[0]) : null;
 }
@@ -233,7 +249,7 @@ export async function dashboardSummary() {
       [config.shopDomain]
     )
   ]);
-  const counts = { abandoned_checkout: {}, post_purchase_upsell: {} };
+  const counts = { abandoned_checkout: {}, abandoned_checkout_follow_up: {}, post_purchase_upsell: {} };
   for (const row of jobs.rows) counts[row.campaign_type][row.status] = row.count;
   return {
     audience: { subscribed: subscribers.rows[0].count, suppressed: suppressed.rows[0].count },

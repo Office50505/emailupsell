@@ -54,12 +54,15 @@ function productVisual(job) {
   };
 }
 
-function layout({ preheader, heading, copy, ctaLabel, ctaUrl, email, campaignType, product }) {
+function layout({ preheader, heading, copy, ctaLabel, ctaUrl, email, campaignType, product, template = {} }) {
   const safeCtaUrl = escapeHtml(ctaUrl);
   const safeUnsubscribeUrl = escapeHtml(unsubscribeUrl(email));
   const isRecovery = campaignType === 'abandoned_checkout';
   const eyebrow = isRecovery ? 'YOUR CUSTOM STAMP IS WAITING' : 'MAKE EVERY PACKAGE MEMORABLE';
   const productLabel = isRecovery ? 'Your brand, ready to make an impression.' : 'A small detail that makes your packaging feel considered.';
+  const showHero = template.heroEnabled !== false;
+  const showRecommendations = template.recommendationsEnabled !== false;
+  const showFooter = template.footerEnabled !== false;
 
   // Table markup and inline styles are deliberate: Gmail and most mobile clients
   // consistently render this layout, unlike the CSS-dependent former version.
@@ -87,11 +90,11 @@ function layout({ preheader, heading, copy, ctaLabel, ctaUrl, email, campaignTyp
             <tr>
               <td bgcolor="#fffdfa" style="overflow:hidden;border:1px solid #dcd8cf;border-radius:0 0 18px 18px;background-color:#fffdfa;background-image:linear-gradient(#fffdfa,#fffdfa);">
                 <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="border-collapse:collapse;">
-                  <tr>
+                  ${showHero ? `<tr>
                     <td bgcolor="#dcefe2" style="padding:0;background-color:#dcefe2;background-image:linear-gradient(#dcefe2,#dcefe2);">
                       <img src="${escapeHtml(product.url)}" width="600" height="300" alt="${escapeHtml(product.alt)}" style="display:block;width:100%;max-width:600px;height:auto;border:0;outline:none;text-decoration:none;">
                     </td>
-                  </tr>
+                  </tr>` : ''}
                   <tr>
                     <td style="padding:30px 36px 10px;">
                       <p style="margin:0 0 14px;color:#14734f;font-size:11px;font-weight:bold;letter-spacing:1.55px;line-height:1.3;text-transform:uppercase;">${eyebrow}</p>
@@ -135,7 +138,7 @@ function layout({ preheader, heading, copy, ctaLabel, ctaUrl, email, campaignTyp
                 </table>
               </td>
             </tr>
-            <tr>
+            ${showRecommendations ? `<tr>
               <td style="padding:22px 0 0;">
                 <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" bgcolor="#fffdfa" style="border-collapse:separate;border-spacing:0;background-color:#fffdfa;background-image:linear-gradient(#fffdfa,#fffdfa);border:1px solid #dcd8cf;border-radius:16px;overflow:hidden;">
                   <tr>
@@ -168,8 +171,8 @@ function layout({ preheader, heading, copy, ctaLabel, ctaUrl, email, campaignTyp
                   </tr>
                 </table>
               </td>
-            </tr>
-            <tr>
+            </tr>` : ''}
+            ${showFooter ? `<tr>
               <td style="padding:16px 0 0;">
                 <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" bgcolor="#173f31" style="border-collapse:collapse;background-color:#173f31;background-image:linear-gradient(#173f31,#173f31);border-radius:16px;">
                   <tr>
@@ -181,7 +184,7 @@ function layout({ preheader, heading, copy, ctaLabel, ctaUrl, email, campaignTyp
                   </tr>
                 </table>
               </td>
-            </tr>
+            </tr>` : ''}
             <tr>
               <td align="center" style="padding:26px 20px 0;color:#747a74;font-size:11px;line-height:1.7;">
                 <strong style="color:#315f4c;letter-spacing:.6px;text-transform:uppercase;">Stay connected</strong><br>
@@ -216,7 +219,8 @@ export function renderEmail(job, setting) {
       ctaUrl: replaceTokens(setting.ctaUrl, job),
       email: job.recipient_email,
       campaignType: job.campaign_type,
-      product: productVisual(job)
+      product: productVisual(job),
+      template: setting.template
     })
   };
 }

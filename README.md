@@ -1,9 +1,10 @@
 # Printmivo Email Upsell
 
-Private, single-store campaign service for two consent-safe flows:
+Private, single-store campaign service for consent-safe lifecycle flows:
 
 1. An abandoned-checkout recovery email, queued 90 minutes after a shopper leaves an open checkout with an email address.
-2. A post-purchase add-on email, queued 7 days after a subscribed customer places an order.
+2. A no-purchase follow-up, queued only after the recovery email is sent and skipped if the shopper orders.
+3. A post-purchase add-on email, queued 7 days after a subscribed customer places an order.
 
 The service starts in `EMAIL_MODE=preview`. Preview mode records a send as `preview_<uuid>` and writes it to logs; it cannot deliver to a customer. Set `EMAIL_MODE=live` and add a verified Resend account/key only after test approval.
 
@@ -11,11 +12,11 @@ The service starts in `EMAIL_MODE=preview`. Preview mode records a send as `prev
 
 The app URL is a secure, embedded Shopify Admin dashboard. It includes:
 
-- editable subject lines, preview text, message, CTA and destination for both flows;
-- per-flow enable/disable controls, timing, and marketing frequency caps;
-- current subscriber, suppression, queued and delivery counts;
-- an inbox-style live preview and a test-send workflow;
-- an audit-friendly delivery log with recipient addresses masked in the UI.
+- a visual flow map that shows exactly what happens after a cart is abandoned, a purchase happens, or no purchase happens;
+- editable subject lines, preview text, message, CTA and destination for every email step;
+- per-flow enable/disable controls, timing, frequency caps, and template modules (product hero, recommendations and brand footer);
+- subscriber, suppression, scheduled, delivered, skipped and failed-delivery counts;
+- an inbox-style live preview, test-send workflow, and an audit-friendly delivery log with masked recipient addresses.
 
 Campaign settings are stored in PostgreSQL, so scheduler runs use the saved values rather than the fallback environment defaults. The service runs its schema migration on start; `npm run db:migrate` can also be used manually.
 
@@ -25,7 +26,7 @@ Campaign settings are stored in PostgreSQL, so scheduler runs use the saved valu
 - Only `SUBSCRIBED` contacts can send.
 - An unsubscribe link writes a local suppression record immediately.
 - A 7-day send cooldown applies across campaigns.
-- An abandoned-checkout job is skipped if an order for that email is recorded after the job became due.
+- An abandoned-checkout job is skipped if an order for that email is recorded after the checkout was updated. The follow-up path uses the same purchase check and exits silently after an order.
 - Idempotent source IDs prevent duplicate campaign jobs.
 
 ## Shopify setup
