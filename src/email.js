@@ -54,15 +54,18 @@ function productVisual(job) {
   };
 }
 
-function layout({ preheader, heading, copy, ctaLabel, ctaUrl, email, campaignType, product, template = {} }) {
+function layout({ preheader, heading, copy, ctaLabel, ctaUrl, email, campaignType, product, template = {}, recoveryOnly = false }) {
   const safeCtaUrl = escapeHtml(ctaUrl);
   const safeUnsubscribeUrl = escapeHtml(unsubscribeUrl(email));
   const isRecovery = campaignType === 'abandoned_checkout';
   const eyebrow = isRecovery ? 'YOUR CUSTOM STAMP IS WAITING' : 'MAKE EVERY PACKAGE MEMORABLE';
   const productLabel = isRecovery ? 'Your brand, ready to make an impression.' : 'A small detail that makes your packaging feel considered.';
   const showHero = template.heroEnabled !== false;
-  const showRecommendations = template.recommendationsEnabled !== false;
+  const showRecommendations = !recoveryOnly && template.recommendationsEnabled !== false;
   const showFooter = template.footerEnabled !== false;
+  const recipientNotice = recoveryOnly
+    ? 'You are receiving this one-time reminder because you began checkout at Printmivo.'
+    : 'You received this because you opted in to Printmivo marketing.';
 
   // Table markup and inline styles are deliberate: Gmail and most mobile clients
   // consistently render this layout, unlike the CSS-dependent former version.
@@ -189,7 +192,7 @@ function layout({ preheader, heading, copy, ctaLabel, ctaUrl, email, campaignTyp
               <td align="center" style="padding:26px 20px 0;color:#747a74;font-size:11px;line-height:1.7;">
                 <strong style="color:#315f4c;letter-spacing:.6px;text-transform:uppercase;">Stay connected</strong><br>
                 <a href="${escapeHtml(config.storeUrl)}" style="color:#315f4c;text-decoration:underline;">Printmivo.com</a> &nbsp;·&nbsp; Reply to this email for help<br>
-                You received this because you opted in to Printmivo marketing.<br>
+                ${recipientNotice}<br>
                 <a href="${safeUnsubscribeUrl}" style="color:#315f4c;text-decoration:underline;">Unsubscribe</a> from future marketing emails.
               </td>
             </tr>
@@ -208,7 +211,7 @@ function replaceTokens(value, job) {
     .replaceAll('{{recovery_url}}', job.payload?.recoveryUrl ?? config.storeUrl);
 }
 
-export function renderEmail(job, setting) {
+export function renderEmail(job, setting, { recoveryOnly = false } = {}) {
   return {
     subject: replaceTokens(setting.subject, job),
     html: layout({
@@ -220,7 +223,8 @@ export function renderEmail(job, setting) {
       email: job.recipient_email,
       campaignType: job.campaign_type,
       product: productVisual(job),
-      template: setting.template
+      template: setting.template,
+      recoveryOnly
     })
   };
 }

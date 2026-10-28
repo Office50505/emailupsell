@@ -1,4 +1,4 @@
-import { claimDueJobs, enqueueCampaign, getCampaignSettings, markFailed, markSent, markSkipped, sendEligibility } from './db.js';
+import { claimDueJobs, enqueueCampaign, getCampaignSettings, markFailed, markSent, markSkipped, sendEligibility, upsertContact } from './db.js';
 import { deliverEmail, renderEmail } from './email.js';
 import { listOpenAbandonedCheckouts } from './shopify.js';
 import { normalizeEmail } from './security.js';
@@ -15,6 +15,13 @@ export async function queueAbandonedCheckouts() {
   for (const checkout of checkouts) {
     const email = normalizeEmail(checkout.customer?.defaultEmailAddress?.emailAddress);
     if (!email || checkout.completedAt) continue;
+    // Capture the address as unknown rather than silently subscribing it. This
+    // allows one recovery-only message to be evaluated safely later.
+    await upsertContact({
+      email,
+      firstName: checkout.customer?.firstName ?? null,
+      marketingState: 'UNKNOWN'
+    });
     const job = await enqueueCampaign({
       campaignType: 'abandoned_checkout',
       sourceId: checkout.id,
@@ -64,12 +71,14 @@ export async function processDueJobs() {
         summary.skipped += 1;
         continue;
       }
-      const email = renderEmail(job, setting);
+      const email = renderEmail(job, setting, {
+        recoveryOnly: eligibility.recoveryWithoutMarketingConsent
+      });
       const delivery = await deliverEmail({ to: job.recipient_email, ...email });
       await markSent(job.id, delivery.id);
       // A recovery email starts a deterministic second branch. The job stays
       // safe and idempotent, then exits automatically if an order appears.
-      if (job.campaign_type === 'abandoned_checkout') {
+      if (job.campaign_type === 'abandoned_checkout' && !eligibility.recoveryWithoutMarketingConsent) {
         const followUp = await getCampaignSettings('abandoned_checkout_follow_up');
         if (followUp?.enabled) {
           await enqueueCampaign({

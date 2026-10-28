@@ -13,7 +13,11 @@ export async function upsertContact({ email, customerId = null, firstName = null
      ON CONFLICT (shop_domain, email) DO UPDATE SET
        customer_id = COALESCE(EXCLUDED.customer_id, email_contacts.customer_id),
        first_name = COALESCE(NULLIF(EXCLUDED.first_name, ''), email_contacts.first_name),
-       marketing_state = EXCLUDED.marketing_state,
+       marketing_state = CASE
+         WHEN EXCLUDED.marketing_state = 'UNKNOWN' AND email_contacts.marketing_state <> 'UNKNOWN'
+           THEN email_contacts.marketing_state
+         ELSE EXCLUDED.marketing_state
+       END,
        updated_at = NOW()
      RETURNING *`,
     [config.shopDomain, email, customerId, firstName, marketingState]
@@ -96,11 +100,20 @@ export async function sendEligibility(job, cooldownDays) {
   );
   const contact = result.rows[0];
   if (!contact) return { allowed: false, reason: 'missing_contact' };
-  if (contact.marketing_state !== 'SUBSCRIBED') return { allowed: false, reason: 'not_marketing_subscribed' };
   if (contact.suppressed_at) return { allowed: false, reason: 'suppressed' };
   if (contact.recently_sent) return { allowed: false, reason: 'frequency_capped' };
   if (['abandoned_checkout', 'abandoned_checkout_follow_up'].includes(job.campaign_type) && contact.ordered_since_due) return { allowed: false, reason: 'ordered_after_abandonment' };
-  return { allowed: true };
+
+  // An active, incomplete checkout can receive one narrowly scoped recovery
+  // reminder even when marketing consent is still unknown. It is deliberately
+  // not a marketing subscription: no recommendations and no second reminder
+  // are allowed on this route. Every other campaign remains opt-in only.
+  const recoveryWithoutMarketingConsent = job.campaign_type === 'abandoned_checkout'
+    && contact.marketing_state === 'UNKNOWN';
+  if (contact.marketing_state !== 'SUBSCRIBED' && !recoveryWithoutMarketingConsent) {
+    return { allowed: false, reason: 'not_marketing_subscribed' };
+  }
+  return { allowed: true, recoveryWithoutMarketingConsent };
 }
 
 export async function markSent(id, providerMessageId) {
