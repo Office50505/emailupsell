@@ -172,13 +172,13 @@ const defaults = {
   },
   post_purchase_upsell: {
     enabled: true,
-    delayMinutes: config.postPurchaseDelayDays * 24 * 60,
+    delayMinutes: 1,
     cooldownDays: config.marketingCooldownDays,
-    subject: 'Complete your Printmivo kit',
-    preheader: 'A few finishing touches for your next order.',
-    heading: 'A useful next step{{first_name}}',
-    body: 'Keep your branding consistent with practical add-ons picked for your recent Printmivo order.',
-    ctaLabel: 'Shop recommended add-ons',
+    subject: 'Your Printmivo stamp is on its way — complete the kit',
+    preheader: 'A few useful add-ons for crisp prints and finished packaging.',
+    heading: 'Your stamp is on its way{{first_name}}',
+    body: 'You just ordered a custom Printmivo stamp. Add the essentials that keep every print crisp and every package on-brand.',
+    ctaLabel: 'Complete your kit',
     ctaUrl: `${config.storeUrl}/collections/all?utm_source=printmivo-email&utm_medium=upsell&utm_campaign=post_purchase`,
     template: { heroEnabled: true, recommendationsEnabled: true, footerEnabled: true }
   }
@@ -211,6 +211,21 @@ export async function ensureCampaignSettings() {
       [config.shopDomain, campaignType, setting.enabled, setting.delayMinutes, setting.cooldownDays, setting.subject, setting.preheader, setting.heading, setting.body, setting.ctaLabel, setting.ctaUrl, JSON.stringify(setting.template)]
     );
   }
+
+  // Upgrade only the untouched legacy 7-day post-purchase rule. This preserves
+  // any merchant who has already set a custom timing or written their own copy.
+  await pool.query(
+    `UPDATE email_campaign_settings
+       SET delay_minutes = $3, subject = $4, preheader = $5, heading = $6,
+           body = $7, cta_label = $8, updated_at = NOW()
+     WHERE shop_domain = $1 AND campaign_type = 'post_purchase_upsell'
+      AND delay_minutes = $2
+       AND subject = 'Complete your Printmivo kit'`,
+    [config.shopDomain, 7 * 24 * 60, defaults.post_purchase_upsell.delayMinutes,
+      defaults.post_purchase_upsell.subject, defaults.post_purchase_upsell.preheader,
+      defaults.post_purchase_upsell.heading, defaults.post_purchase_upsell.body,
+      defaults.post_purchase_upsell.ctaLabel]
+  );
 }
 
 export async function getCampaignSettings(campaignType) {

@@ -35,7 +35,7 @@ function isSetting(value) {
   const validTemplate = ['heroEnabled', 'recommendationsEnabled', 'footerEnabled']
     .every(key => typeof template[key] === 'boolean');
   return Boolean(value && typeof value.enabled === 'boolean'
-    && Number.isInteger(value.delayMinutes) && value.delayMinutes >= 5 && value.delayMinutes <= 43200
+    && Number.isInteger(value.delayMinutes) && value.delayMinutes >= 1 && value.delayMinutes <= 43200
     && Number.isInteger(value.cooldownDays) && value.cooldownDays >= 1 && value.cooldownDays <= 90
     && validStrings
     && (/^https?:\/\//.test(value.ctaUrl) || value.ctaUrl === '{{recovery_url}}')
@@ -118,4 +118,25 @@ app.post('/api/admin/campaigns/:campaignType/test', async (request, response) =>
 app.use(express.static(dashboardDir, { maxAge: '1h', index: 'index.html' }));
 app.get('/app', (_request, response) => response.sendFile(path.join(dashboardDir, 'index.html')));
 
-app.listen(config.port, () => console.log(`Printmivo email-upsell service listening on :${config.port} (${config.emailMode})`));
+let processingDueJobs = false;
+
+async function runDueEmailJobs() {
+  if (processingDueJobs) return;
+  processingDueJobs = true;
+  try {
+    await processDueJobs();
+  } catch (error) {
+    console.error('Background email job run failed', error);
+  } finally {
+    processingDueJobs = false;
+  }
+}
+
+app.listen(config.port, () => {
+  console.log(`Printmivo email-upsell service listening on :${config.port} (${config.emailMode})`);
+  // A paid-order webhook queues the upsell instantly. This lightweight worker
+  // claims due jobs every minute, so a one-minute post-purchase email does not
+  // wait for the five-minute abandoned-checkout scheduler.
+  setTimeout(runDueEmailJobs, 1_000).unref();
+  setInterval(runDueEmailJobs, 60_000).unref();
+});
