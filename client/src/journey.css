@@ -1,0 +1,46 @@
+/* A connected recovery journey rather than a collection of floating cards. */
+.journey-intro { margin: 9px 0 0; color: #717a71; font-size: 12px; line-height: 1.5; }
+.journey-body { margin-top: 21px; padding-top: 22px; }
+.journey-diagram { min-width: 0; }
+.journey-mainline { display: grid; grid-template-columns: minmax(150px, 1fr) minmax(72px, .48fr) minmax(150px, 1fr) minmax(72px, .48fr) minmax(150px, 1fr); align-items: center; gap: 9px; }
+.journey-mainline .flow-chip { min-width: 0; width: 100%; min-height: 70px; padding: 13px; }
+.journey-mainline .flow-chip > i { width: 28px; height: 28px; }
+.journey-mainline .flow-chip b { font-size: 12px; }
+.journey-mainline .flow-chip small { font-size: 10px; }
+.journey-connector { position: relative; height: 1px; background: #cbd7cc; }
+.journey-connector::after { content: ""; position: absolute; right: -1px; top: -3px; width: 7px; height: 7px; border-top: 1px solid #aebbae; border-right: 1px solid #aebbae; transform: rotate(45deg); }
+.journey-connector small { position: absolute; left: 50%; top: -21px; transform: translateX(-50%); padding: 0 5px; background: #fff; color: #818b80; font-size: 9px; white-space: nowrap; }
+.journey-outcomes { position: relative; display: grid; grid-template-columns: 1fr 1fr; gap: 28px; margin: 32px 0 2px; padding: 0 12%; }
+.journey-outcomes::before { content: ""; position: absolute; left: 50%; top: -19px; height: 19px; border-left: 1px solid #cbd7cc; }
+.outcome { position: relative; padding-top: 17px; border-top: 1px solid #d5ded5; }
+.outcome::before { content: ""; position: absolute; top: -1px; width: 50%; border-top: 1px solid #cbd7cc; }
+.outcome.purchased::before { right: -1px; }
+.outcome.open::before { left: -1px; }
+.outcome header { display: flex; align-items: center; gap: 7px; margin-bottom: 10px; }
+.outcome header span { font-size: 10px; font-weight: 800; }
+.outcome header i { display: grid; place-items: center; width: 17px; height: 17px; border-radius: 50%; background: #eaf4ed; color: #258156; font-size: 10px; font-style: normal; }
+.outcome.open header span { color: #9a671f; }
+.outcome.open header i { background: #fff1d7; color: #a46c1e; }
+.outcome > div { display: flex; }
+.outcome .flow-chip { min-width: 0; width: min(100%, 220px); padding: 11px; }
+.outcome .flow-chip b { font-size: 11px; }
+.outcome .flow-chip small { font-size: 9px; }
+.journey-summary { padding-left: 27px; background: linear-gradient(90deg, rgba(247, 250, 247, 0), #f7faf7); }
+
+@media (max-width: 980px) {
+  .journey-mainline { grid-template-columns: 1fr 58px 1fr 58px 1fr; }
+  .journey-outcomes { padding: 0 7%; gap: 18px; }
+  .journey-summary { background: transparent; }
+}
+
+@media (max-width: 720px) {
+  .journey-mainline { display: flex; align-items: stretch; gap: 0; }
+  .journey-mainline .flow-chip { flex: 1; }
+  .journey-mainline .flow-chip:not(.selected) { display: none; }
+  .journey-mainline .flow-chip.decision { display: flex; }
+  .journey-connector { width: 34px; flex: none; align-self: center; }
+  .journey-connector small { display: none; }
+  .journey-outcomes { padding: 0; gap: 12px; margin-top: 23px; }
+  .outcome .flow-chip { width: 100%; }
+  .journey-intro { max-width: 420px; }
+}
