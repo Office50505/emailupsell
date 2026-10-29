@@ -28,11 +28,11 @@ const stickerUrl = `${config.storeUrl}/products/custom-logo-stickers-500-pcs-%E2
 function heroImageUrl(value) {
   try {
     const url = new URL(value);
-    // Shopify's CDN makes a real 2:1 crop, not merely a CSS-scaled portrait.
-    // This preserves a strong visual while keeping the main email compact.
+    // Shopify's CDN makes a real crop, not merely a CSS-scaled portrait.
+    // A 20:9 hero leaves room for the rest of the email on a typical inbox view.
     if (url.hostname.endsWith('shopify.com') || url.hostname === 'printmivo.com') {
       url.searchParams.set('width', '1200');
-      url.searchParams.set('height', '600');
+      url.searchParams.set('height', '540');
       url.searchParams.set('crop', 'center');
     }
     return url.toString();
@@ -95,7 +95,7 @@ function layout({ preheader, heading, copy, ctaLabel, ctaUrl, email, campaignTyp
                 <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="border-collapse:collapse;">
                   ${showHero ? `<tr>
                     <td bgcolor="#dcefe2" style="padding:0;background-color:#dcefe2;background-image:linear-gradient(#dcefe2,#dcefe2);">
-                      <img src="${escapeHtml(product.url)}" width="600" height="300" alt="${escapeHtml(product.alt)}" style="display:block;width:100%;max-width:600px;height:auto;border:0;outline:none;text-decoration:none;">
+                      <img src="${escapeHtml(product.url)}" width="600" height="270" alt="${escapeHtml(product.alt)}" style="display:block;width:100%;max-width:600px;height:auto;border:0;outline:none;text-decoration:none;">
                     </td>
                   </tr>` : ''}
                   <tr>
@@ -134,6 +134,35 @@ function layout({ preheader, heading, copy, ctaLabel, ctaUrl, email, campaignTyp
                       <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="border-collapse:collapse;border-top:1px solid #e6e3dc;">
                         <tr>
                           <td style="padding-top:20px;color:#667269;font-size:12px;line-height:1.55;">Thoughtful details. Professional results. Built to make every impression count.</td>
+                        </tr>
+                      </table>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:22px 0 0;">
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" bgcolor="#ffffff" style="border-collapse:separate;border-spacing:0;background-color:#ffffff;background-image:linear-gradient(#ffffff,#ffffff);border:1px solid #dcd8cf;border-radius:16px;overflow:hidden;">
+                  <tr>
+                    <td align="center" style="padding:22px 18px 12px;color:#173f31;font-size:10px;font-weight:bold;letter-spacing:1.35px;line-height:1.3;text-transform:uppercase;">Made to work beautifully with your packaging</td>
+                  </tr>
+                  <tr>
+                    <td style="padding:5px 16px 22px;">
+                      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="border-collapse:collapse;">
+                        <tr>
+                          <td width="33.33%" align="center" valign="top" style="width:33.33%;padding:0 8px;border-right:1px solid #e9e7e1;">
+                            <p style="margin:0 0 6px;color:#173f31;font-size:13px;font-weight:bold;line-height:1.3;">Custom-made</p>
+                            <p style="margin:0;color:#687269;font-size:11px;line-height:1.5;">Built around the details that make your brand yours.</p>
+                          </td>
+                          <td width="33.33%" align="center" valign="top" style="width:33.33%;padding:0 8px;border-right:1px solid #e9e7e1;">
+                            <p style="margin:0 0 6px;color:#173f31;font-size:13px;font-weight:bold;line-height:1.3;">Easy to use</p>
+                            <p style="margin:0;color:#687269;font-size:11px;line-height:1.5;">A simple way to make every package feel more considered.</p>
+                          </td>
+                          <td width="33.33%" align="center" valign="top" style="width:33.33%;padding:0 8px;">
+                            <p style="margin:0 0 6px;color:#173f31;font-size:13px;font-weight:bold;line-height:1.3;">Here to help</p>
+                            <p style="margin:0;color:#687269;font-size:11px;line-height:1.5;">Reply anytime if you would like a hand with your order.</p>
+                          </td>
                         </tr>
                       </table>
                     </td>
