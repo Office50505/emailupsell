@@ -52,7 +52,7 @@ CREATE TABLE IF NOT EXISTS email_campaign_settings (
   shop_domain TEXT NOT NULL,
   campaign_type TEXT NOT NULL CHECK (campaign_type IN ('abandoned_checkout', 'abandoned_checkout_follow_up', 'post_purchase_upsell')),
   enabled BOOLEAN NOT NULL DEFAULT TRUE,
-  delay_minutes INTEGER NOT NULL CHECK (delay_minutes BETWEEN 5 AND 43200),
+  delay_minutes INTEGER NOT NULL CHECK (delay_minutes BETWEEN 1 AND 43200),
   cooldown_days INTEGER NOT NULL DEFAULT 7 CHECK (cooldown_days BETWEEN 1 AND 90),
   subject TEXT NOT NULL,
   preheader TEXT NOT NULL,
@@ -87,6 +87,27 @@ BEGIN
   ALTER TABLE email_campaign_jobs
     ADD CONSTRAINT email_campaign_jobs_campaign_type_check
     CHECK (campaign_type IN ('abandoned_checkout', 'abandoned_checkout_follow_up', 'post_purchase_upsell'));
+END $$;
+
+-- Post-purchase jobs may be configured to run after one minute. Older
+-- installations still have the original five-minute minimum, so replace that
+-- check in place before the application seeds the new one-minute default.
+DO $$
+DECLARE constraint_name TEXT;
+BEGIN
+  SELECT conname INTO constraint_name
+  FROM pg_constraint
+  WHERE conrelid = 'email_campaign_settings'::regclass
+    AND contype = 'c'
+    AND pg_get_constraintdef(oid) LIKE '%delay_minutes%';
+
+  IF constraint_name IS NOT NULL THEN
+    EXECUTE format('ALTER TABLE email_campaign_settings DROP CONSTRAINT %I', constraint_name);
+  END IF;
+
+  ALTER TABLE email_campaign_settings
+    ADD CONSTRAINT email_campaign_settings_delay_minutes_check
+    CHECK (delay_minutes BETWEEN 1 AND 43200);
 END $$;
 
 DO $$
